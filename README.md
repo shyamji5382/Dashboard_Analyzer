@@ -1,14 +1,25 @@
-# Meridian Data Analytics Dashboard
+# Commerce Analytics Dashboard
 
-A FastAPI + React dashboard built around the REST Countries exercise in `Hit External API.xlsx`. Country analytics is the main view; the existing commerce dashboard, JSON/CSV/XML ingestion, joined analytics, and currency conversion remain available under **Commerce**.
+A full-stack data analytics application built with **FastAPI, SQLite, and React** for the company Commerce Analytics assignment. The default dashboard joins the supplied orders, products, and shipments to report revenue and delivery performance.
+
+Core capabilities:
+
+- JSON, CSV, and XML ingestion with nested order/item flattening.
+- Orders + Products + Shipments integration, validation, normalization, and data-quality reporting.
+- Order values, category revenue, revenue trends, and delivery-delay classification.
+- External currency conversion with SQLite exchange-rate caching.
+- An interactive React dashboard with date/category/delivery filters, pagination, chart drill-down, and order details.
+- Context-based state management, reusable components, and loading/error/retry states.
+
+Open http://127.0.0.1:5173/ for the Commerce dashboard. Sidebar navigation prioritizes **Dashboard**, **Orders**, and **Data sources**. **Countries**, grouped under **External API**, is an additional engineering feature demonstrating external API consumption and nested country transformations; it is not the primary assignment workflow.
 
 ## Dashboard design
 
-The frontend blends both supplied reference layouts: four pastel KPI cards with circular icons, a compact sidebar, white chart tools, and a responsive data table. Country analytics combines density rankings with a regional population pie; the Density toggle uses comparison bars, since densities are not additive shares. Commerce combines revenue lines and order bars with separate currency/count axes, category comparisons, and a delivery timing pie. Chart selections apply filters, and trend points and ranking bars support keyboard drill-down. All visualizations use actual records, without invented growth percentages or time series.
+The frontend blends both supplied reference layouts: four pastel KPI cards with circular icons, a compact sidebar, white chart tools, and a responsive data table. Commerce combines revenue lines and order bars with separate currency/count axes, category comparisons, and a delivery timing pie. Chart selections apply filters, and trend points support keyboard drill-down. The secondary Countries view combines density rankings with a regional population pie; its Density toggle uses comparison bars, since densities are not additive shares. All visualizations use actual records, without invented growth percentages or time series.
 
 ## Assignment data
 
-Commerce now uses the supplied `Orders.json`, `Products.csv`, and shipment XML from the conversation. Open http://127.0.0.1:5173/?view=overview to see these records directly.
+The primary dashboard uses the supplied `Orders.json`, `Products.csv`, and `Shipments.xml`. Opening http://127.0.0.1:5173/ shows these records directly; no view query parameter is required. Existing `?view=overview` links remain supported.
 
 | Order | Customer | Calculation | USD total | Reported shipment status | Delivery timing |
 | --- | --- | --- | --- | --- | --- |
@@ -22,45 +33,6 @@ The supplied files contain spreadsheet-style quote wrappers. `backend/data/origi
 Orders use `qty` and item `price`; products use `ProductID,ProductName,Category` without catalog prices. The importers map these aliases, preserve customer and shipment IDs, and join all three datasets by IDs. Revenue uses the supplied item prices. Missing currency defaults to **USD**, as confirmed by the user, and is reported in import warnings. No product prices, images, expected dates, or actual dates have been invented.
 
 **Delay policy is status-only when promised dates are absent.** `Delayed` explicitly sets the delay flag. `Delivered` confirms completion but does not establish on-time arrival, so order 1001 remains `delivery_status: unknown`; its original reported status and duration remain visible. There is no implicit five-day SLA. `DELIVERY_SLA_DAYS` is empty/unset by default; an optional explicit value enables duration-based assessment for other datasets. Date-based shipments continue to use their actual/expected dates, which take precedence over reported status. The boolean `delayed: false` is not proof of on-time delivery; inspect `delivery_status` to distinguish Unknown from On time.
-
-## Country analytics
-
-The main view includes country count, total population, area-weighted density, distinct currencies, regional population/density charts, density rankings, currency groups, and a paginated table. Region, inclusive population range, currency, language, and search filters apply consistently to the summary and table. Country details include currencies, languages, capitals, bordering countries with drill-down, and map links. CSV export retrieves all matching pages, not just the visible rows.
-
-### External API and bundled data
-
-The spreadsheet's `https://restcountries.com/v3.1/all` endpoint now returns a deprecation response rather than country records. [REST Countries v5](https://restcountries.com/docs/countries/api-versions) uses `https://api.restcountries.com/countries/v5` with bearer authentication. The [documented public demo](https://restcountries.com/docs/countries) returns one sample country, not the full world dataset.
-
-- Without a personal API key, the dashboard starts with **250 real countries and territories from the official repository snapshot**. This is labeled `Repository snapshot`, never a live API feed.
-- **Test API** calls the v5 provider through the backend using its public demo token, normalizes the response, and shows a preview notice. Preview data never replaces stored country records.
-- To enable **Sync API**, set `$env:REST_COUNTRIES_API_KEY = 'your-key'` in the shell before starting the servers. Keep the key on the backend, never in `VITE_*` variables. The backend retrieves all pages before replacing data in one transaction. Provider errors, incomplete/repeated pages, and demo responses preserve the previous dataset.
-- The restore icon beside the source label reloads the bundled snapshot. Startup never requires a country API request; restarts preserve imported country data.
-
-`backend/data/Countries.json` is the unmodified upstream nested JSON at commit `bfadee4f951682c29970e53677707bc558e80b74`. [Pinned source](https://github.com/restcountries/restcountries/blob/bfadee4f951682c29970e53677707bc558e80b74/src/main/resources/countriesV3.1.json), provenance in `Countries.meta.json`, and the upstream MPL-2.0 license in `REST_COUNTRIES_LICENSE.txt` are included. Download date is not the observation date of population estimates; the snapshot is not a claim of current census data.
-
-### Modeling and transformations
-
-SQLite stores countries, currency/language catalogs, their many-to-many relationships, capitals, borders, and source metadata separately. The normalizer supports v3 nested JSON and v5 `data.objects`, converts numeric strings, validates finite nonnegative population/area, deduplicates relations, and reports skipped malformed or duplicate countries. Missing population stays null, not zero; missing or zero area yields null density. Genuine zero population remains zero.
-
-Density is **population / area in square kilometers**, not GDP or an economic estimate. Combined and regional density divide the population sum by the area sum over countries with both usable values, rather than averaging country densities. Currency-group populations can overlap, while global totals count every country once. SQL `EXISTS` filters prevent many-to-many joins from multiplying counts. Pagination uses SQL LIMIT/OFFSET; related records are fetched in three batched queries per page.
-
-| Method | Endpoint | Result |
-| --- | --- | --- |
-| POST | `/ingest/countries?source=snapshot` | Restore the full bundled snapshot |
-| POST | `/ingest/countries?source=api&preview=true` | Live preview without changing storage |
-| POST | `/ingest/countries?source=api` | Full paginated v5 sync with a backend API key |
-| GET | `/analytics/countries/summary` | KPIs, regions, currency groups, density rankings |
-| GET | `/analytics/countries` | Filtered, sorted, paginated countries |
-| GET | `/analytics/countries/{code}` | Country details and bordering countries |
-| GET | `/analytics/countries/filters` | Available filters and source metadata |
-
-Summary and list accept `region`, `population_min`, `population_max`, `currency` (uppercase three-letter code), `language`, and `search`. List additionally accepts `page`, `page_size` (1-100), and `sort`: `population_desc`, `density_desc`, `area_desc`, or `name_asc`. Details use three-letter country codes. API keys are never returned in metadata or error messages.
-
-```powershell
-curl.exe "http://127.0.0.1:8000/analytics/countries/summary?region=Asia&population_min=10000000"
-curl.exe "http://127.0.0.1:8000/analytics/countries?currency=EUR&page=1&page_size=20"
-curl.exe -X POST "http://127.0.0.1:8000/ingest/countries?preview=true"
-```
 
 ## Run locally
 
@@ -96,7 +68,7 @@ npm run dev
 
 Dashboard: http://127.0.0.1:5173. Interactive API documentation: http://127.0.0.1:8000/docs.
 
-The first startup imports 250 countries plus the assignment files: 2 orders, 3 products, and 2 shipments. Subsequent startups preserve the database, including intentionally emptied commerce datasets. These orders use USD so the initial dashboard does not depend on internet access. Select another reporting currency to exercise the exchange-rate API, or import mixed-currency orders.
+The first startup imports the assignment files: 2 orders, 3 products, and 2 shipments, plus the 250-country snapshot for the secondary feature. Subsequent startups preserve the database, including intentionally emptied commerce datasets. These orders use USD so the initial dashboard does not depend on internet access. Select another reporting currency to exercise the exchange-rate API, or import mixed-currency orders.
 
 ## REST API
 
@@ -185,9 +157,48 @@ The assignment format is also supported:
 
 ## Dashboard
 
-The commerce overview has revenue, order count, average order value, and delayed-order KPIs; a revenue/orders toggle; category totals; delivery distribution; and a paginated order table. Filters and search are synchronized with the URL. Order details show joined products, quantities, customer ID, original prices, converted totals, shipment ID, reported status, duration, and available dates. CSV export includes every filtered order, fetching all pages. The data-source view supports file uploads and bundled assignment imports with reports. Reported shipment status is displayed separately from assessed delivery timing.
+The default Commerce Analytics Dashboard has total revenue, total orders, average order value, and delayed-order KPIs; a revenue/orders toggle; category totals; delivery distribution; and a paginated order table. Filters and search are synchronized with the URL. Order details show joined products, quantities, customer ID, original prices, converted totals, shipment ID, reported status, duration, and available dates. CSV export includes every filtered order, fetching all pages. The data-source view supports file uploads and bundled assignment imports with reports. Reported shipment status is displayed separately from assessed delivery timing.
 
-Context + reducer manages filters and pagination. Fetches use AbortController to cancel stale requests, search is debounced, summary and order errors are independent, and loading, empty, error, and retry states are included. Layouts adapt to mobile, with a collapsible navigation panel, native accessible controls, keyboard-dismissible modal, visible focus states, and reduced-motion support. Product thumbnails are from Unsplash and are optional; failed image loads do not block analytics.
+Context + reducer manages filters and pagination. Fetches use AbortController to cancel stale requests, search is debounced, summary and order errors are independent, and loading, empty, error, and retry states are included. Layouts adapt to mobile, with a collapsible navigation panel, native accessible controls, keyboard-dismissible modal, visible focus states, and reduced-motion support. Product images are optional and only shown when provided in imported records; the assignment data contains none. Failed image loads do not block analytics.
+
+## Additional feature: Countries / External API
+
+Open **Countries** under **External API** in the sidebar, or http://127.0.0.1:5173/?view=countries. This secondary view includes country count, total population, area-weighted density, distinct currencies, regional population/density charts, density rankings, currency groups, and a paginated table. Region, inclusive population range, currency, language, and search filters apply consistently to the summary and table. Country details include currencies, languages, capitals, bordering countries with drill-down, and map links. CSV export retrieves all matching pages, not just the visible rows. Country and commerce filters remain independent when switching views.
+
+### External API and bundled data
+
+The spreadsheet's `https://restcountries.com/v3.1/all` endpoint now returns a deprecation response rather than country records. [REST Countries v5](https://restcountries.com/docs/countries/api-versions) uses `https://api.restcountries.com/countries/v5` with bearer authentication. The [documented public demo](https://restcountries.com/docs/countries) returns one sample country, not the full world dataset.
+
+- Without a personal API key, the dashboard starts with **250 real countries and territories from the official repository snapshot**. This is labeled `Repository snapshot`, never a live API feed.
+- **Test API** calls the v5 provider through the backend using its public demo token, normalizes the response, and shows a preview notice. Preview data never replaces stored country records.
+- To enable **Sync API**, set `$env:REST_COUNTRIES_API_KEY = 'your-key'` in the shell before starting the servers. Keep the key on the backend, never in `VITE_*` variables. The backend retrieves all pages before replacing data in one transaction. Provider errors, incomplete/repeated pages, and demo responses preserve the previous dataset.
+- The restore icon beside the source label reloads the bundled snapshot. Startup never requires a country API request; restarts preserve imported country data.
+
+`backend/data/Countries.json` is the unmodified upstream nested JSON at commit `bfadee4f951682c29970e53677707bc558e80b74`. [Pinned source](https://github.com/restcountries/restcountries/blob/bfadee4f951682c29970e53677707bc558e80b74/src/main/resources/countriesV3.1.json), provenance in `Countries.meta.json`, and the upstream MPL-2.0 license in `REST_COUNTRIES_LICENSE.txt` are included. Download date is not the observation date of population estimates; the snapshot is not a claim of current census data.
+
+### Modeling and transformations
+
+SQLite stores countries, currency/language catalogs, their many-to-many relationships, capitals, borders, and source metadata separately. The normalizer supports v3 nested JSON and v5 `data.objects`, converts numeric strings, validates finite nonnegative population/area, deduplicates relations, and reports skipped malformed or duplicate countries. Missing population stays null, not zero; missing or zero area yields null density. Genuine zero population remains zero.
+
+Density is **population / area in square kilometers**, not GDP or an economic estimate. Combined and regional density divide the population sum by the area sum over countries with both usable values, rather than averaging country densities. Currency-group populations can overlap, while global totals count every country once. SQL `EXISTS` filters prevent many-to-many joins from multiplying counts. Pagination uses SQL LIMIT/OFFSET; related records are fetched in three batched queries per page.
+
+| Method | Endpoint | Result |
+| --- | --- | --- |
+| POST | `/ingest/countries?source=snapshot` | Restore the full bundled snapshot |
+| POST | `/ingest/countries?source=api&preview=true` | Live preview without changing storage |
+| POST | `/ingest/countries?source=api` | Full paginated v5 sync with a backend API key |
+| GET | `/analytics/countries/summary` | KPIs, regions, currency groups, density rankings |
+| GET | `/analytics/countries` | Filtered, sorted, paginated countries |
+| GET | `/analytics/countries/{code}` | Country details and bordering countries |
+| GET | `/analytics/countries/filters` | Available filters and source metadata |
+
+Summary and list accept `region`, `population_min`, `population_max`, `currency` (uppercase three-letter code), `language`, and `search`. List additionally accepts `page`, `page_size` (1-100), and `sort`: `population_desc`, `density_desc`, `area_desc`, or `name_asc`. Details use three-letter country codes. API keys are never returned in metadata or error messages.
+
+```powershell
+curl.exe "http://127.0.0.1:8000/analytics/countries/summary?region=Asia&population_min=10000000"
+curl.exe "http://127.0.0.1:8000/analytics/countries?currency=EUR&page=1&page_size=20"
+curl.exe -X POST "http://127.0.0.1:8000/ingest/countries?preview=true"
+```
 
 ## Configuration
 
@@ -196,7 +207,7 @@ Context + reducer manages filters and pagination. Fetches use AbortController to
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ANALYTICS_DB_PATH` | `backend/analytics.db` | SQLite file |
-| `SEED_DEMO_DATA` | `true` | Initial sample-data import |
+| `SEED_DEMO_DATA` | `true` | Initial assignment files and country snapshot import; does not load `data/demo/` |
 | `REST_COUNTRIES_API_KEY` | unset | Full v5 sync; without a key, Test API uses the public preview |
 | `DELIVERY_SLA_DAYS` | unset | Optional duration SLA; unset preserves status-only classification |
 | `CORS_ORIGINS` | localhost and 127.0.0.1 on 5173 | Comma-separated origins |

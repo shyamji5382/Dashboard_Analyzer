@@ -9,11 +9,11 @@ async function navigate(page, name) {
 
 const countryCount = (page) => page.locator('.kpi').first().locator('.kpi-value');
 
-test('country analytics is the main view and fits the viewport', async ({ page }, testInfo) => {
+test('secondary country analytics remains accessible and fits the viewport', async ({ page }, testInfo) => {
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Country overview' })).toBeVisible();
+  await page.goto('/?view=countries');
+  await expect(page.getByRole('heading', { name: 'Countries Analytics' })).toBeVisible();
   await expect(countryCount(page)).toHaveText('250');
   await expect(page.locator('.country-density-chart .recharts-bar-rectangle')).toHaveCount(8);
   await expect(page.locator('.country-region-pie .recharts-pie-sector').first()).toBeVisible();
@@ -27,7 +27,7 @@ test('country analytics is the main view and fits the viewport', async ({ page }
 });
 
 test('regional pie filters population without turning density into a share', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=countries');
   await expect(countryCount(page)).toHaveText('250');
   await page.locator('.country-region-pie .recharts-pie-sector').first().click();
   await expect(page.getByLabel('Region', { exact: true })).not.toHaveValue('');
@@ -40,7 +40,7 @@ test('regional pie filters population without turning density into a share', asy
 });
 
 test('region, population, currency and language filters work with chart toggles', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=countries');
   await expect(countryCount(page)).toHaveText('250');
   await page.getByRole('button', { name: 'Density', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Density by region' })).toBeVisible();
@@ -63,7 +63,7 @@ test('region, population, currency and language filters work with chart toggles'
 });
 
 test('country pagination, search, detail and border drill-down work', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=countries');
   await expect(countryCount(page)).toHaveText('250');
   await page.locator('.country-density-chart .recharts-bar-rectangle').first().click();
   await expect(page.getByRole('dialog').getByRole('heading', { name: 'Macau', exact: true })).toBeVisible();
@@ -96,37 +96,44 @@ test('country pagination, search, detail and border drill-down work', async ({ p
 });
 
 test('export downloads all 250 countries across API pages', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=countries');
   await expect(countryCount(page)).toHaveText('250');
   const pending = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Export', exact: true }).click();
   const download = await pending;
-  expect(download.suggestedFilename()).toMatch(/^meridian-countries-.*\.csv$/);
+  expect(download.suggestedFilename()).toMatch(/^countries-.*\.csv$/);
   const csv = await readFile(await download.path(), 'utf8');
   expect(csv.split('\r\n')).toHaveLength(251);
   expect(csv).toContain('"CAN","Canada"');
 });
 
 test('country and commerce views preserve independent filters', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?view=countries');
   await expect(countryCount(page)).toHaveText('250');
   await page.getByLabel('Region', { exact: true }).selectOption('Asia');
   await expect(page).toHaveURL(/country_region=Asia/);
-  await navigate(page, 'Commerce');
-  await expect(page.getByRole('heading', { name: 'Commerce overview' })).toBeVisible();
+  await navigate(page, 'Dashboard');
+  await expect(page.getByRole('heading', { name: 'Commerce Analytics Dashboard' })).toBeVisible();
+  await expect(page).not.toHaveURL(/view=/);
   await expect(page.locator('.kpi').nth(1).locator('.kpi-value')).toHaveText('2');
   await page.locator('#category').selectOption('Electronics');
   await expect(page).toHaveURL(/country_region=Asia/);
   await navigate(page, 'Countries');
+  await expect(page).toHaveURL(/view=countries/);
   await expect(page.getByLabel('Region', { exact: true })).toHaveValue('Asia');
   await page.reload();
-  await expect(page.getByRole('heading', { name: 'Country overview' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Countries Analytics' })).toBeVisible();
   await expect(page.getByLabel('Region', { exact: true })).toHaveValue('Asia');
+  await navigate(page, 'Dashboard');
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Commerce Analytics Dashboard' })).toBeVisible();
+  await expect(page.locator('#category')).toHaveValue('Electronics');
+  await expect(page.locator('.kpi').first().locator('.kpi-value')).toHaveText('$2,200.00');
 });
 
 test('country API error can be retried and demo preview does not replace data', async ({ page }) => {
   await page.route('**/api/analytics/countries/summary**', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Country storage unavailable' } }) }));
-  await page.goto('/');
+  await page.goto('/?view=countries');
   await expect(page.getByRole('heading', { name: 'Unable to load countries' })).toBeVisible();
   await page.unroute('**/api/analytics/countries/summary**');
   await page.getByRole('button', { name: 'Retry countries', exact: true }).click();

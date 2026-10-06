@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Activity, AlertCircle, ArrowDownToLine, Boxes, Check, ChevronRight, CircleDollarSign, CloudDownload, Database, Globe2, LayoutDashboard, Menu, RefreshCw, ShoppingBag, Truck, X } from 'lucide-react';
 import { useDashboard } from '../context/DashboardContext';
 import { useCountries } from '../context/CountryContext';
@@ -16,10 +16,10 @@ import LoadingSpinner from '../components/LoadingSpinner';
 import CountryDashboard from './CountryDashboard';
 
 const navigation = [
-  { id: 'countries', label: 'Countries', icon: Globe2 },
-  { id: 'overview', label: 'Commerce', icon: LayoutDashboard },
+  { id: 'overview', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'orders', label: 'Orders', icon: ShoppingBag },
   { id: 'sources', label: 'Data sources', icon: Database },
+  { id: 'countries', label: 'Countries', icon: Globe2 },
 ];
 
 export default function Dashboard() {
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const country = useCountries();
   const [view, setView] = useState(() => {
     const initial = new URLSearchParams(location.search).get('view');
-    return navigation.some((entry) => entry.id === initial) ? initial : 'countries';
+    return navigation.some((entry) => entry.id === initial) ? initial : 'overview';
   });
   const [mobileNav, setMobileNav] = useState(false);
   const [exporting, setExporting] = useState(false);
@@ -43,7 +43,7 @@ export default function Dashboard() {
   const activeUpdatedAt = isCountry ? country.updatedAt : updatedAt;
   const activeExporting = isCountry ? country.exporting : exporting;
   const sourceLabel = country.options?.source.source === 'live_api' ? 'Live API' : 'Repository snapshot';
-  const title = isCountry ? 'Country overview' : view === 'sources' ? 'Data sources' : view === 'orders' ? 'Orders' : 'Commerce overview';
+  const title = isCountry ? 'Countries Analytics' : view === 'sources' ? 'Data sources' : view === 'orders' ? 'Orders' : 'Commerce Analytics Dashboard';
   async function exportOrders() {
     setExporting(true); setExportError('');
     try {
@@ -56,38 +56,40 @@ export default function Dashboard() {
       const header = ['Order ID', 'Date', 'Customer', 'Category', 'Order Value', 'Currency', 'Delivery Status'];
       const rows = data.map((order) => [order.order_id, order.order_date, order.customer_name,
         [...new Set(order.items.map((item) => item.category))].join('; '), order.total_value, order.currency, order.delivery_status]);
-      downloadCsv(header, rows, `meridian-orders-${new Date().toISOString().slice(0, 10)}.csv`);
+      downloadCsv(header, rows, `commerce-orders-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (err) { setExportError(err.message); }
     finally { setExporting(false); }
   }
   function navigate(next) {
     setView(next); setMobileNav(false);
     const url = new URL(location.href);
-    if (next === 'countries') url.searchParams.delete('view');
+    if (next === 'overview') url.searchParams.delete('view');
     else url.searchParams.set('view', next);
     history.replaceState(null, '', `${url.pathname}${url.search}`);
   }
   return <div className="app-shell">
     {mobileNav && <button className="sidebar-backdrop" aria-label="Close navigation" onClick={() => setMobileNav(false)} />}
     <aside className={`sidebar ${mobileNav ? 'is-open' : ''}`}>
-      <a className="brand" href="#" onClick={(event) => { event.preventDefault(); navigate('countries'); }}><span className="brand-mark"><Activity size={23} strokeWidth={2.3} /></span><span>meridian<span className="brand-dot">.</span></span></a>
-      <button className="workspace-switch" onClick={() => navigate('countries')}><span className="workspace-icon"><Globe2 size={18} /></span><span>Research workspace<small>Analytics</small></span><ChevronRight size={15} /></button>
-      <span className="nav-heading">WORKSPACE</span>
-      <nav aria-label="Main navigation">{navigation.map(({ id, label, icon: Icon }) => <button key={id} className={`nav-item ${view === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-label={label} aria-current={view === id ? 'page' : undefined}>
+      <a className="brand" href="/" onClick={(event) => { event.preventDefault(); navigate('overview'); }}><span className="brand-mark"><Activity size={23} strokeWidth={2.3} /></span><span>Analytics</span></a>
+      <button className="workspace-switch" onClick={() => navigate('overview')}><span className="workspace-icon"><ShoppingBag size={18} /></span><span>Commerce workspace<small>Data analytics</small></span><ChevronRight size={15} /></button>
+      <span className="nav-heading">COMMERCE</span>
+      <nav aria-label="Main navigation">{navigation.map(({ id, label, icon: Icon }) => <Fragment key={id}>
+        {id === 'countries' && <span className="nav-heading secondary-nav-heading">EXTERNAL API</span>}
+        <button className={`nav-item ${view === id ? 'active' : ''}`} onClick={() => navigate(id)} aria-label={label} aria-current={view === id ? 'page' : undefined}>
         <Icon size={18} strokeWidth={1.7} /><span>{label}</span>{id === 'sources' && <span className="nav-count">{options?.imports?.length || 0}</span>}
-      </button>)}</nav>
+      </button></Fragment>)}</nav>
       <div className="sidebar-bottom"><div className="connection-state"><i /><span>{activeError ? 'Connection issue' : activeLoading ? 'Connecting' : 'Data connected'}</span><Database size={13} /></div>
-        <div className="workspace-profile"><span className="profile-avatar">MA</span><div><strong>Meridian Analytics</strong><small>Workspace</small></div><Check size={14} /></div>
+        <div className="workspace-profile"><span className="profile-avatar">CA</span><div><strong>Commerce Analytics</strong><small>Workspace</small></div><Check size={14} /></div>
       </div>
     </aside>
     <div className="main-shell">
       <header className="topbar"><div className="breadcrumb"><button className="icon-button menu-toggle" title="Open navigation" aria-label="Open navigation" onClick={() => setMobileNav(!mobileNav)}>{mobileNav ? <X size={19} /> : <Menu size={19} />}</button><span>Workspace</span><ChevronRight size={13} /><strong>{navigation.find((entry) => entry.id === view).label}</strong></div>
-        <div className="topbar-right"><span className="workspace-status"><i />{isCountry ? sourceLabel : 'Commerce workspace'}</span><span className="profile-avatar small-avatar">MA</span></div></header>
+        <div className="topbar-right"><span className="workspace-status"><i />{isCountry ? sourceLabel : 'Commerce workspace'}</span><span className="profile-avatar small-avatar">CA</span></div></header>
       <main className="dashboard-main" id="main-content">
-        <div className="page-heading"><div><span className="eyebrow">MERIDIAN ANALYTICS</span><h1>{title}</h1><p>{isCountry ? 'Countries, populations and currencies' : view === 'sources' ? 'Source records and import activity' : 'Revenue, orders and delivery at a glance'}</p></div>
+        <div className="page-heading"><div><span className="eyebrow">{isCountry ? 'EXTERNAL API' : 'COMMERCE ANALYTICS'}</span><h1>{title}</h1><p>{isCountry ? 'Countries, populations and currencies' : view === 'sources' ? 'Source records and import activity' : 'Revenue, orders and delivery at a glance'}</p></div>
           <div className="page-actions"><button className={`icon-button refresh-button ${activeLoading ? 'is-refreshing' : ''}`} title="Refresh data" aria-label="Refresh data" disabled={activeLoading} onClick={activeRefresh}><RefreshCw size={17} /></button>
             {view !== 'sources' && <button className="button export-button" disabled={activeExporting || activeLoading || !!activeError} onClick={isCountry ? country.exportCountries : exportOrders}>{activeExporting ? <RefreshCw className="spin" size={15} /> : <ArrowDownToLine size={15} />}<span>{activeExporting ? 'Exporting' : 'Export'}</span></button>}
-            {isCountry ? <button className="button primary" onClick={() => country.sync()} disabled={country.syncing || activeLoading}>{country.syncing ? <RefreshCw className="spin" size={15} /> : <CloudDownload size={15} />}{country.syncing ? 'Connecting' : country.options?.source.api_configured ? 'Sync API' : 'Test API'}</button> : <button className="button primary" onClick={() => navigate(view === 'sources' ? 'overview' : 'sources')}>{view === 'sources' ? <LayoutDashboard size={15} /> : <Database size={15} />}{view === 'sources' ? 'Commerce' : 'Manage data'}</button>}</div>
+            {isCountry ? <button className="button primary" onClick={() => country.sync()} disabled={country.syncing || activeLoading}>{country.syncing ? <RefreshCw className="spin" size={15} /> : <CloudDownload size={15} />}{country.syncing ? 'Connecting' : country.options?.source.api_configured ? 'Sync API' : 'Test API'}</button> : <button className="button primary" onClick={() => navigate(view === 'sources' ? 'overview' : 'sources')}>{view === 'sources' ? <LayoutDashboard size={15} /> : <Database size={15} />}{view === 'sources' ? 'Dashboard' : 'Manage data'}</button>}</div>
         </div>
         {!isCountry && exportError && <div className="error-banner" role="alert"><AlertCircle size={17} />{exportError}</div>}
         {isCountry ? <CountryDashboard /> : view === 'sources' ? <DataSources /> : <>
@@ -106,7 +108,7 @@ export default function Dashboard() {
           </> : <OrdersTable standalone />}
         </>}
         <footer className="dashboard-footer"><span><i />{activeLoading ? 'Updating data' : activeUpdatedAt ? `Fetched at ${activeUpdatedAt.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}` : 'Awaiting data'}</span>
-          <span>{isCountry ? `REST Countries / ${sourceLabel}` : <>{quality?.unpriced_items ? `${quality.unpriced_items} unpriced items excluded` : summary?.meta.exchange_rates?.some((rate) => rate.stale) ? 'Cached exchange rates' : 'Meridian Analytics'}{quality?.unknown_delivery_orders > 0 && view !== 'sources' ? ` / ${quality.unknown_delivery_orders} unknown deliveries` : ''}</>}</span></footer>
+          <span>{isCountry ? `REST Countries / ${sourceLabel}` : <>{quality?.unpriced_items ? `${quality.unpriced_items} unpriced items excluded` : summary?.meta.exchange_rates?.some((rate) => rate.stale) ? 'Cached exchange rates' : 'Commerce Analytics'}{quality?.unknown_delivery_orders > 0 && view !== 'sources' ? ` / ${quality.unknown_delivery_orders} unknown deliveries` : ''}</>}</span></footer>
       </main>
     </div>
   </div>;

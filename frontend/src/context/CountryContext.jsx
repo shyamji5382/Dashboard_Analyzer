@@ -85,7 +85,7 @@ export function CountryProvider({ children }) {
       downloadCsv(['Country Code', 'Country', 'Region', 'Population', 'Area (km2)', 'Density (people/km2)', 'Currencies', 'Languages'],
         records.map((country) => [country.code, country.name, country.region, country.population, country.area_km2, country.density,
           country.currencies.map((entry) => entry.code).join('; '), country.languages.map((entry) => entry.name).join('; ')]),
-        `meridian-countries-${new Date().toISOString().slice(0, 10)}.csv`);
+        `countries-${new Date().toISOString().slice(0, 10)}.csv`);
     } catch (err) { setActionError(err.message); }
     finally { setExporting(false); }
   }

@@ -44,8 +44,8 @@ def create_app(db_path=None, seed=True, currency_factory=CurrencyService, countr
             currencies.close()
             country_service.close()
 
-    application = FastAPI(title="Meridian Analytics API", version="1.0.0", lifespan=lifespan,
-        description="Explore normalized REST Countries data and joined commerce analytics.")
+    application = FastAPI(title="Commerce Analytics API", version="1.0.0", lifespan=lifespan,
+        description="Ingest JSON orders, CSV products and XML shipments for joined commerce analytics. Includes an additional REST Countries integration.")
     origins = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
     application.add_middleware(CORSMiddleware, allow_origins=[origin.strip() for origin in origins],
                                allow_methods=["GET", "POST"], allow_headers=["Content-Type"])

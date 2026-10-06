@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 test('reference-inspired cards and chart tools fit narrow and tablet widths', async ({ page }, testInfo) => {
   for (const width of [320, 768, 1024]) {
     await page.setViewportSize({ width, height: 1000 });
-    for (const view of ['countries', 'overview']) {
-      await page.goto(view === 'countries' ? '/' : '/?view=overview');
+    for (const view of ['overview', 'countries']) {
+      await page.goto(view === 'countries' ? '/?view=countries' : '/');
       await expect(page.locator('.kpi').first().locator('.kpi-value')).toHaveText(view === 'countries' ? '250' : '$2,800.00');
       await page.evaluate(() => document.fonts.ready);
       const layout = await page.evaluate(() => {
