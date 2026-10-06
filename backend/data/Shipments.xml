@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<shipments>
+  <shipment>
+    <shipment_id>S001</shipment_id>
+    <order_id>1001</order_id>
+    <delivery_days>3</delivery_days>
+    <status>Delivered</status>
+  </shipment>
+  <shipment>
+    <shipment_id>S002</shipment_id>
+    <order_id>1002</order_id>
+    <delivery_days>7</delivery_days>
+    <status>Delayed</status>
+  </shipment>
+</shipments>

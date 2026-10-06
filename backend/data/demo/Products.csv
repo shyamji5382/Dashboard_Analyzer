@@ -1,0 +1,9 @@
+product_id,name,category,unit_price,currency,image_url
+PRD-001,Studio Wireless Headphones,Electronics,149,USD,https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=120&h=120&fit=crop
+PRD-002,Mechanical Keyboard,Electronics,89,USD,https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=120&h=120&fit=crop
+PRD-003,Everyday Running Shoes,Apparel,120,USD,https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=120&h=120&fit=crop
+PRD-004,Cotton Weekend Tote,Apparel,32,USD,
+PRD-005,Pour-over Coffee Set,Home & Living,68,USD,https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=120&h=120&fit=crop
+PRD-006,Desk Planter,Home & Living,24,USD,https://images.unsplash.com/photo-1416879595882-3373a0480b5b?w=120&h=120&fit=crop
+PRD-007,Travel Camera,Electronics,449,USD,https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=120&h=120&fit=crop
+PRD-008,Trail Water Bottle,Outdoors,38,USD,

@@ -1,0 +1,15 @@
+.venv/
+.tools/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.log
+*.db
+*.db-*
+.env
+.env.*
+!.env.example

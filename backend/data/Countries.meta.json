@@ -1,0 +1,9 @@
+{
+  "provider": "REST Countries",
+  "mode": "repository_snapshot",
+  "source_url": "https://github.com/restcountries/restcountries/blob/bfadee4f951682c29970e53677707bc558e80b74/src/main/resources/countriesV3.1.json",
+  "commit": "bfadee4f951682c29970e53677707bc558e80b74",
+  "downloaded_at": "2026-10-06",
+  "note": "Repository snapshot, not live population estimates. Download date is not the observation date.",
+  "license": "MPL-2.0; see REST_COUNTRIES_LICENSE.txt"
+}
