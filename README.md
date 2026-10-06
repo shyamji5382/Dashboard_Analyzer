@@ -11,7 +11,7 @@ Core capabilities:
 - An interactive React dashboard with date/category/delivery filters, pagination, chart drill-down, and order details.
 - Context-based state management, reusable components, and loading/error/retry states.
 
-Open http://127.0.0.1:5173/ for the Commerce dashboard. Sidebar navigation prioritizes **Dashboard**, **Orders**, and **Data sources**. **Countries**, grouped under **External API**, is an additional engineering feature demonstrating external API consumption and nested country transformations; it is not the primary assignment workflow.
+Open http://127.0.0.1:5173/ for the Commerce dashboard. Sidebar navigation prioritizes **Dashboard**, **Orders**, and **Data sources**. The **Countries** option under **External API** opens Countries analytics, an additional engineering feature demonstrating external API consumption and nested country transformations; it is not the primary assignment workflow.
 
 ## Dashboard design
 
@@ -163,7 +163,7 @@ Context + reducer manages filters and pagination. Fetches use AbortController to
 
 ## Additional feature: Countries / External API
 
-Open **Countries** under **External API** in the sidebar, or http://127.0.0.1:5173/?view=countries. This secondary view includes country count, total population, area-weighted density, distinct currencies, regional population/density charts, density rankings, currency groups, and a paginated table. Region, inclusive population range, currency, language, and search filters apply consistently to the summary and table. Country details include currencies, languages, capitals, bordering countries with drill-down, and map links. CSV export retrieves all matching pages, not just the visible rows. Country and commerce filters remain independent when switching views.
+Open **Countries** under **External API** in the sidebar, or http://127.0.0.1:5173/?view=countries. The page heading remains **Countries Analytics**. This secondary view includes country count, total population, area-weighted density, distinct currencies, regional population/density charts, density rankings, currency groups, and a paginated table. Region, inclusive population range, currency, language, and search filters apply consistently to the summary and table. Country details include currencies, languages, capitals, bordering countries with drill-down, and map links. CSV export retrieves all matching pages, not just the visible rows. Country and commerce filters remain independent when switching views.
 
 ### External API and bundled data
 
