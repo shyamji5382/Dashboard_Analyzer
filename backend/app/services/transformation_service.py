@@ -145,9 +145,8 @@ class AnalyticsService:
         end = str(filters.get("end_date") or (max(trends) if trends else ""))
         if start and end and (date.fromisoformat(end) - date.fromisoformat(start)).days <= 366:
             current, last = date.fromisoformat(start), date.fromisoformat(end)
-            while current <= last:
-                trends[current.isoformat()]
-                current += timedelta(days=1)
+            for offset in range((last - current).days + 1):
+                trends[(current + timedelta(days=offset)).isoformat()]
         eligible_deliveries = [order for order in orders if order["delivery_status"] in ("on_time", "delayed")
                                and (order["actual_delivery"] or order["delivery_days"] is not None)]
         on_time_deliveries = sum(1 for order in eligible_deliveries if order["delivery_status"] == "on_time")
@@ -173,9 +172,10 @@ class AnalyticsService:
         query, parameters = self._query(filters)
         with self.database.connect() as connection:
             total = connection.execute(f"SELECT COUNT(DISTINCT order_id) FROM ({query})", parameters).fetchone()[0]
+            offset = (page - 1) * page_size
             selected = connection.execute(
                 f"SELECT order_id, order_date FROM ({query}) GROUP BY order_id ORDER BY order_date DESC, order_id DESC LIMIT ? OFFSET ?",
-                [*parameters, page_size, (page - 1) * page_size]).fetchall()
+                [*parameters, page_size, offset]).fetchall() if offset < total else []
             ids = [row["order_id"] for row in selected]
             rows = connection.execute(query + f" AND o.order_id IN ({','.join('?' for _ in ids)}) ORDER BY o.order_date DESC, o.order_id DESC, i.id",
                                       [*parameters, *ids]).fetchall() if ids else []

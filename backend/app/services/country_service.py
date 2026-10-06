@@ -82,6 +82,12 @@ class CountryService:
                 payload = response.json()
                 records = country_records(payload)
                 data = payload.get("data", {}) if isinstance(payload, dict) else {}
+                total = data.get("meta", {}).get("total")
+                if total is not None:
+                    count = int(total)
+                    if isinstance(total, bool) or (isinstance(total, float) and total != count) or not 0 <= count <= 5000:
+                        raise ValueError("invalid country count")
+                    total = count
                 if data.get("_demo"):
                     if not preview:
                         raise CountrySourceError("The provider returned demo data. The existing country dataset was preserved.", "country_api_demo_response")
@@ -93,8 +99,7 @@ class CountryService:
                     return {"persisted": False, "source": "api_preview", "imported": 0,
                             "preview": parsed.records[:1], "warnings": parsed.warnings, "source_url": API_URL}
                 if not records:
-                    total = data.get("meta", {}).get("total")
-                    if total is not None and len(all_records) < int(total):
+                    if total is not None and len(all_records) < total:
                         raise CountrySourceError("The provider returned an incomplete dataset; the previous dataset was preserved.")
                     break
                 fingerprint = json.dumps(records, sort_keys=True)
@@ -103,10 +108,9 @@ class CountryService:
                 fingerprints.add(fingerprint)
                 all_records.extend(records)
                 offset += len(records)
-                total = data.get("meta", {}).get("total")
-                if total is not None and (int(total) < 0 or int(total) > 5000):
-                    raise ValueError("invalid country count")
-                if (total is not None and offset >= int(total)) or (total is None and len(records) < 100):
+                if total is not None and offset > total:
+                    raise ValueError("country records exceed the reported count")
+                if (total is not None and offset == total) or (total is None and len(records) < 100):
                     break
             else:
                 raise CountrySourceError("The provider exceeded the pagination limit; the previous dataset was preserved.")
@@ -155,7 +159,8 @@ class CountryService:
         ordering = {"population_desc": "c.population DESC,c.name", "name_asc": "c.name COLLATE NOCASE", "density_desc": "density DESC,c.name", "area_desc": "c.area_km2 DESC,c.name"}[sort]
         with self.database.connect() as connection:
             total = connection.execute(f"SELECT COUNT(*) FROM countries c WHERE {where}", params).fetchone()[0]
-            rows = connection.execute(f"SELECT c.*, {DENSITY} AS density FROM countries c WHERE {where} ORDER BY {ordering} LIMIT ? OFFSET ?", [*params, page_size, (page-1)*page_size]).fetchall()
+            offset = (page - 1) * page_size
+            rows = connection.execute(f"SELECT c.*, {DENSITY} AS density FROM countries c WHERE {where} ORDER BY {ordering} LIMIT ? OFFSET ?", [*params, page_size, offset]).fetchall() if offset < total else []
             records = self._enrich(connection, rows)
         return {"data": records, "pagination": {"page": page, "page_size": page_size, "total": total, "total_pages": ceil(total/page_size)}, "meta": {"source": self.source()}}
 
