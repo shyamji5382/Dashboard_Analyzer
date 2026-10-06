@@ -148,15 +148,16 @@ class AnalyticsService:
             while current <= last:
                 trends[current.isoformat()]
                 current += timedelta(days=1)
-        delivered = sum(1 for order in orders if order["delivery_status"] in ("on_time", "delayed")
-                        and (order["actual_delivery"] or order["delivery_days"] is not None))
+        eligible_deliveries = [order for order in orders if order["delivery_status"] in ("on_time", "delayed")
+                               and (order["actual_delivery"] or order["delivery_days"] is not None)]
+        on_time_deliveries = sum(1 for order in eligible_deliveries if order["delivery_status"] == "on_time")
         count = len(orders)
         return {"data": {
             "metrics": {"total_orders": count, "total_revenue": as_number(total),
                 "delayed_orders": delivery["delayed"], "on_time_orders": delivery["on_time"],
                 "pending_orders": delivery["pending"], "unknown_orders": delivery["unknown"],
                 "average_order_value": as_number(total / count) if count else 0,
-                "on_time_rate": round(100 * delivery["on_time"] / delivered, 1) if delivered else 0,
+                "on_time_rate": round(100 * on_time_deliveries / len(eligible_deliveries), 1) if eligible_deliveries else None,
                 "currency": target},
             "revenue_trend": [{"date": day, "revenue": as_number(value["revenue"]), "orders": value["orders"]}
                               for day, value in sorted(trends.items())],

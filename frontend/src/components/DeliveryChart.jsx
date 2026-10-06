@@ -10,8 +10,9 @@ export default function DeliveryChart() {
   const { summary, setFilters } = useDashboard();
   const data = summary?.data.delivery_performance || [];
   const total = summary?.data.metrics.total_orders || 0;
+  const onTimeRate = summary?.data.metrics.on_time_rate;
   return <section className="chart-panel delivery-panel" aria-label="Delivery performance">
-    <div className="panel-heading"><div><h2>Delivery performance</h2><p>{formatNumber(total)} orders / delivery timing</p></div><Truck size={18} className="subtle-icon" /></div>
+    <div className="panel-heading"><div><h2>Delivery performance</h2><p>{formatNumber(total)} orders / On-time rate: {onTimeRate == null ? 'N/A' : `${onTimeRate}%`}</p></div><Truck size={18} className="subtle-icon" /></div>
     <div className="delivery-content">
       <div className="donut-chart">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>

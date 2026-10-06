@@ -31,6 +31,26 @@ test('dashboard loads real data, renders charts and fits the viewport', async ({
   expect(errors).toEqual([]);
 });
 
+test('delivery chart distinguishes unavailable, zero and full on-time rates', async ({ page }, testInfo) => {
+  let onTimeRate;
+  await page.route('**/api/analytics/summary?**', async (route) => {
+    const response = await route.fetch();
+    const summary = await response.json();
+    summary.data.metrics.on_time_rate = onTimeRate;
+    await route.fulfill({ response, json: summary });
+  });
+  for (const rate of [null, 0, 100]) {
+    onTimeRate = rate;
+    await page.goto('/');
+    await expect(page.locator('.kpi').nth(1).locator('.kpi-value')).toHaveText('2');
+    const delivery = page.getByRole('region', { name: 'Delivery performance', exact: true });
+    await expect(delivery.locator('.panel-heading p')).toHaveText(`2 orders / On-time rate: ${rate == null ? 'N/A' : `${rate}%`}`);
+    await expect(delivery.locator('.recharts-pie-sector').first()).toBeVisible();
+    expect(await delivery.evaluate((panel) => panel.scrollWidth <= panel.clientWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`on-time-rate-${rate ?? 'unavailable'}.png`), fullPage: true });
+  }
+});
+
 test('trend and delivery charts support assignment drill-down', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('.kpi').nth(1).locator('.kpi-value')).toHaveText('2');

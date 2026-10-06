@@ -29,7 +29,14 @@ def parse_shipments(content: bytes) -> ParsedData:
         element.tag = element.tag.rsplit("}", 1)[-1]
     if root.tag not in ("shipments", "shipment"):
         raise DataError("XML root must be <shipments> or <shipment>")
-    rows = [root] if root.tag == "shipment" else root.findall("shipment")
+    if root.tag == "shipments":
+        if any(child.tag != "shipment" for child in root):
+            raise DataError("XML <shipments> must contain only <shipment> elements")
+        if (root.text or "").strip() or any((child.tail or "").strip() for child in root):
+            raise DataError("XML <shipments> cannot contain text outside <shipment> elements")
+        rows = list(root)
+    else:
+        rows = [root]
     result = ParsedData()
     seen = set()
     for index, row in enumerate(rows, 1):

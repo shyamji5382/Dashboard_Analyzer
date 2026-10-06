@@ -61,6 +61,7 @@ def test_empty_database(client):
     response = client.get("/analytics/summary").json()["data"]
     assert response["metrics"]["total_orders"] == 0
     assert response["metrics"]["total_revenue"] == 0
+    assert response["metrics"]["on_time_rate"] is None
     assert client.get("/analytics/orders").json()["pagination"]["total_pages"] == 0
 
 
@@ -85,6 +86,34 @@ def test_flatten_join_convert_and_aggregate(client):
     assert len(detail["items"]) == 2
     assert detail["items"][1]["line_total"] == 30
     assert client.get("/analytics/summary?currency=EUR").json()["data"]["metrics"]["total_revenue"] == 35
+
+
+@pytest.mark.parametrize("duration,expected_rate", [
+    ("", None),
+    ("<delivery_days>3</delivery_days>", 100),
+], ids=["status-only-with-no-completed-deliveries", "one-duration-bearing-on-time-order"])
+def test_on_time_rate_uses_same_eligible_orders(client, duration, expected_rate):
+    client.app.state.analytics.delivery_sla_days = None
+    import_all(client)
+    xml = f"""<shipments>
+    <shipment><order_id>A</order_id><status>On time</status></shipment>
+    <shipment><order_id>B</order_id><status>On time</status>{duration}</shipment>
+    </shipments>"""
+    assert client.post("/ingest/xml", content=xml).status_code == 200
+    metrics = client.get("/analytics/summary").json()["data"]["metrics"]
+    assert metrics["total_orders"] == 3
+    assert metrics["on_time_orders"] == 2
+    assert metrics["delayed_orders"] == 0
+    assert metrics["unknown_orders"] == 1
+    assert metrics["on_time_rate"] == expected_rate
+    if metrics["on_time_rate"] is not None:
+        assert 0 <= metrics["on_time_rate"] <= 100
+    filtered = client.get("/analytics/summary?delivery_status=on_time").json()["data"]["metrics"]
+    assert filtered["total_orders"] == filtered["on_time_orders"] == 2
+    assert filtered["on_time_rate"] == expected_rate
+    status_only = client.get("/analytics/summary?search=Alice").json()["data"]["metrics"]
+    assert status_only["total_orders"] == status_only["on_time_orders"] == 1
+    assert status_only["on_time_rate"] is None
 
 
 @pytest.mark.parametrize("query,count,revenue", [
@@ -112,6 +141,27 @@ def test_sql_pagination_and_detail(client):
     assert client.get("/analytics/orders?page=100").json()["data"] == []
     assert client.get("/analytics/orders/missing").status_code == 404
     assert client.get("/analytics/filters").json()["data"]["dataset_counts"] == {"orders": 3, "products": 3, "shipments": 2}
+
+
+@pytest.mark.parametrize("query,order_value,item_count", [("", 50, 2), ("category=Home", 30, 1)])
+def test_large_order_pagination_counts_orders_not_joined_items(client, query, order_value, item_count):
+    assert client.post("/ingest/csv", content=PRODUCTS).status_code == 200
+    orders = [{**ORDERS["orders"][0], "order_id": f"T{index:04}"} for index in range(205)]
+    assert client.post("/ingest/json", json=orders).status_code == 200
+    metrics = client.get(f"/analytics/summary?{query}").json()["data"]["metrics"]
+    assert metrics["total_orders"] == 205
+    assert metrics["total_revenue"] == 205 * order_value
+    combined = []
+    for page, size in ((1, 100), (2, 100), (3, 5)):
+        response = client.get(f"/analytics/orders?{query}&page={page}&page_size=100").json()
+        assert response["pagination"] == {"page": page, "page_size": 100, "total": 205, "total_pages": 3}
+        assert len(response["data"]) == size
+        assert all(len(order["items"]) == item_count for order in response["data"])
+        combined.extend(response["data"])
+    ids = [order["order_id"] for order in combined]
+    assert ids == [f"T{index:04}" for index in reversed(range(205))]
+    assert len(set(ids)) == 205
+    assert sum(order["total_value"] for order in combined) == metrics["total_revenue"]
 
 
 @pytest.mark.parametrize("path", ["/analytics/orders?page=0", "/analytics/orders?page_size=101", "/analytics/summary?currency=usd", "/analytics/summary?start_date=garbage", "/analytics/summary?delivery_status=bad", "/analytics/summary?start_date=2026-07-10&end_date=2026-07-01"])
@@ -172,6 +222,35 @@ def test_xml_entities_rejected_and_previous_data_preserved(client):
     assert client.post("/ingest/xml", content=xml).status_code == 422
     assert client.post("/ingest/xml", content="<shipments>").status_code == 422
     assert client.get("/analytics/summary").json()["data"]["metrics"]["on_time_orders"] == 1
+
+
+@pytest.mark.parametrize("xml", [
+    "<shipments><shippment><order_id>A</order_id></shippment></shipments>",
+    "<shipments><shipment><order_id>A</order_id><status>Delayed</status></shipment><other /></shipments>",
+    '<shipments xmlns="urn:test"><other><order_id>A</order_id></other></shipments>',
+    "<shipments>not shipment records</shipments>",
+    "<shipments><shipment><order_id>A</order_id></shipment>unexpected text</shipments>",
+], ids=["misspelled-child", "mixed-valid-and-unknown-children", "namespaced-unknown-child", "root-text", "child-tail-text"])
+def test_unsupported_xml_structure_preserves_existing_data(client, xml):
+    import_all(client)
+    before = {path: client.get(path).json() for path in ("/analytics/summary", "/analytics/orders", "/analytics/filters")}
+    response = client.post("/ingest/xml", content=xml)
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "invalid_dataset"
+    assert {path: client.get(path).json() for path in before} == before
+
+
+@pytest.mark.parametrize("xml", ["<shipments />", '<shipments xmlns="urn:test">\n <!-- empty dataset -->\n </shipments>'])
+def test_explicit_empty_xml_clears_only_shipments(client, xml):
+    import_all(client)
+    response = client.post("/ingest/xml", content=xml)
+    assert response.status_code == 200
+    assert response.json()["data"]["imported"] == 0
+    assert client.get("/analytics/filters").json()["data"]["dataset_counts"] == {"orders": 3, "products": 3, "shipments": 0}
+    metrics = client.get("/analytics/summary").json()["data"]["metrics"]
+    assert metrics["total_orders"] == 3
+    assert metrics["total_revenue"] == 70
+    assert metrics["unknown_orders"] == 3
 
 
 def test_csv_missing_values_duplicate_and_invalid_price(client):
@@ -293,6 +372,7 @@ def test_assignment_status_only_rule_keeps_delivered_timing_unknown(client):
     metrics = response["data"]["metrics"]
     assert metrics["delayed_orders"] == metrics["unknown_orders"] == 1
     assert metrics["on_time_orders"] == 0
+    assert metrics["on_time_rate"] == 0
     assert response["meta"]["delivery_sla_days"] is None
     assert client.get("/analytics/orders/1001").json()["data"]["delayed"] is False
     assert client.get("/analytics/orders/1001").json()["data"]["delivery_status"] == "unknown"
