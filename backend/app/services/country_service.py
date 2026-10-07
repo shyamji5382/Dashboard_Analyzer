@@ -1,5 +1,4 @@
 import json
-import os
 from datetime import datetime, timezone
 from math import ceil
 from pathlib import Path
@@ -12,8 +11,7 @@ from app.services.validation import DataError
 
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data"
-API_URL = "https://api.restcountries.com/countries/v5"
-FIELDS = "codes.alpha_3,names.common,names.official,region,subregion,population,area.kilometers,currencies,languages,flag.url_png,capitals.name,borders,links.google_maps"
+API_URL = "https://restcountries.com/v3.1/all"
 DENSITY = "CASE WHEN c.population IS NOT NULL AND c.area_km2 > 0 THEN 1.0*c.population/c.area_km2 END"
 
 
@@ -27,11 +25,10 @@ class CountryService:
     def __init__(self, database: Database, client=None, api_key=None):
         self.database = database
         self.client = client or httpx.Client(timeout=15.0, follow_redirects=False)
-        self.api_key = (api_key if api_key is not None else os.getenv("REST_COUNTRIES_API_KEY", "")).strip()
 
     @property
     def configured(self):
-        return bool(self.api_key and self.api_key != "rc_live_demo")
+        return True
 
     def close(self):
         self.client.close()
@@ -69,56 +66,35 @@ class CountryService:
         return {"imported": len(parsed.records), "skipped": parsed.skipped, "warnings": parsed.warnings,
                 "source": source, "synced_at": now, "persisted": True}
 
+    @staticmethod
+    def _validate_source_count(payload):
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), dict):
+            return
+        data = payload["data"]
+        records = data.get("objects")
+        meta = data.get("meta", {})
+        if not isinstance(records, list) or not isinstance(meta, dict) or "total" not in meta:
+            return
+        total = meta["total"]
+        count = int(total)
+        if isinstance(total, bool) or (isinstance(total, float) and total != count) or count != len(records):
+            raise ValueError("invalid country count")
+
     def sync_api(self, preview=False):
-        if not preview and not self.configured:
-            raise CountrySourceError("Full synchronization requires REST_COUNTRIES_API_KEY on the backend. The public demo only returns a sample country.", "country_api_key_required")
-        all_records, fingerprints = [], set()
-        offset = 0
         try:
-            for _ in range(50):
-                response = self.client.get(API_URL, headers={"Authorization": f"Bearer {self.api_key if self.configured else 'rc_live_demo'}"},
-                    params={"limit": 100, "offset": offset, "response_fields": FIELDS})
-                response.raise_for_status()
-                payload = response.json()
-                records = country_records(payload)
-                data = payload.get("data", {}) if isinstance(payload, dict) else {}
-                total = data.get("meta", {}).get("total")
-                if total is not None:
-                    count = int(total)
-                    if isinstance(total, bool) or (isinstance(total, float) and total != count) or not 0 <= count <= 5000:
-                        raise ValueError("invalid country count")
-                    total = count
-                if data.get("_demo"):
-                    if not preview:
-                        raise CountrySourceError("The provider returned demo data. The existing country dataset was preserved.", "country_api_demo_response")
-                    parsed = normalize_countries(records)
-                    return {"persisted": False, "source": "api_preview", "imported": 0,
-                            "preview": parsed.records, "warnings": parsed.warnings, "source_url": API_URL}
-                if preview:
-                    parsed = normalize_countries(records)
-                    return {"persisted": False, "source": "api_preview", "imported": 0,
-                            "preview": parsed.records[:1], "warnings": parsed.warnings, "source_url": API_URL}
-                if not records:
-                    if total is not None and len(all_records) < total:
-                        raise CountrySourceError("The provider returned an incomplete dataset; the previous dataset was preserved.")
-                    break
-                fingerprint = json.dumps(records, sort_keys=True)
-                if fingerprint in fingerprints:
-                    raise CountrySourceError("The provider repeated a page; the previous dataset was preserved.")
-                fingerprints.add(fingerprint)
-                all_records.extend(records)
-                offset += len(records)
-                if total is not None and offset > total:
-                    raise ValueError("country records exceed the reported count")
-                if (total is not None and offset == total) or (total is None and len(records) < 100):
-                    break
-            else:
-                raise CountrySourceError("The provider exceeded the pagination limit; the previous dataset was preserved.")
-            return self.replace(normalize_countries(all_records), "live_api", API_URL)
+            response = self.client.get(API_URL)
+            response.raise_for_status()
+            payload = response.json()
+            self._validate_source_count(payload)
+            parsed = normalize_countries(payload)
+            if preview:
+                return {"persisted": False, "source": "api_preview", "imported": 0,
+                        "preview": parsed.records[:1], "warnings": parsed.warnings, "source_url": API_URL}
+            return self.replace(parsed, "live_api", API_URL)
         except CountrySourceError:
             raise
         except (httpx.HTTPError, ValueError, TypeError, KeyError, AttributeError, DataError):
-            raise CountrySourceError("REST Countries could not be read. Check the connection and API key; existing country data remains available.") from None
+            raise CountrySourceError("REST Countries could not be read. Check the connection; existing country data remains available.") from None
 
     @staticmethod
     def _where(filters):

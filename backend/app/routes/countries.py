@@ -18,7 +18,7 @@ def country_filters(region: Annotated[str | None, Query(max_length=120)] = None,
             "population_max": population_max, "currency": currency, "language": language, "search": search}.items() if value is not None and value != ""}
 
 
-@router.post("/ingest/countries", summary="Import the repository snapshot, sync v5, or test a live API preview")
+@router.post("/ingest/countries", summary="Import the repository snapshot, sync REST Countries v3.1, or test a live API preview")
 def ingest_countries(request: Request, source: Literal["api", "snapshot"] = "api", preview: bool = False):
     service = request.app.state.countries
     return {"data": service.load_snapshot() if source == "snapshot" else service.sync_api(preview)}

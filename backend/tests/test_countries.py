@@ -6,7 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.database.db import Database
 from app.main import create_app
-from app.services.country_service import CountryService, CountrySourceError
+from app.services.country_service import API_URL, CountryService, CountrySourceError
 from app.services.country_transform import normalize_countries
 from app.services.validation import DataError
 
@@ -136,11 +136,21 @@ def test_invalid_country_parameters(client, query):
     assert response.status_code == 422 and "error" in response.json()
 
 
-def test_key_requirement_is_structured_and_preserves_data(client):
-    response = client.post("/ingest/countries")
-    assert response.status_code == 503
-    assert response.json()["error"]["code"] == "country_api_key_required"
-    assert client.get("/analytics/countries").json()["pagination"]["total"] == 4
+def test_live_country_sync_needs_no_api_key(tmp_path):
+    called = []
+    def handler(request):
+        called.append(request)
+        return httpx.Response(200, json=COUNTRIES)
+    def factory(database):
+        return CountryService(database, httpx.Client(transport=httpx.MockTransport(handler)))
+    with TestClient(create_app(tmp_path / "route-sync.db", seed=False, country_factory=factory)) as instance:
+        instance.app.state.countries.replace(normalize_countries(COUNTRIES), "test", "https://example.com")
+        response = instance.post("/ingest/countries")
+        assert response.status_code == 200
+        assert response.json()["data"]["imported"] == 4
+        assert str(called[0].url) == API_URL
+        assert "authorization" not in called[0].headers
+        assert instance.get("/analytics/countries").json()["pagination"]["total"] == 4
 
 
 def test_snapshot_seed_is_complete_and_persistent(tmp_path):
@@ -154,23 +164,24 @@ def test_snapshot_seed_is_complete_and_persistent(tmp_path):
             assert instance.get("/analytics/countries/CAN").json()["data"]["currencies"][0]["code"] == "CAD"
 
 
-def service_with_transport(tmp_path, handler, key="test-secret"):
+def service_with_transport(tmp_path, handler):
     database = Database(tmp_path / "external.db"); database.initialize()
-    service = CountryService(database, httpx.Client(transport=httpx.MockTransport(handler)), api_key=key)
+    service = CountryService(database, httpx.Client(transport=httpx.MockTransport(handler)))
     service.replace(normalize_countries(COUNTRIES), "test", "https://example.com")
     return service
 
 
-def test_public_demo_preview_never_replaces_dataset(tmp_path):
+def test_api_preview_never_replaces_dataset(tmp_path):
     requests = []
     def handler(request):
         requests.append(request)
-        return httpx.Response(200, json=envelope([v5(COUNTRIES[0])], _demo="sample", meta={"total": 1}))
-    service = service_with_transport(tmp_path, handler, key="")
+        return httpx.Response(200, json=COUNTRIES)
+    service = service_with_transport(tmp_path, handler)
     try:
         result = service.sync_api(preview=True)
         assert result["persisted"] is False and len(result["preview"]) == 1
-        assert requests[0].headers["Authorization"] == "Bearer rc_live_demo"
+        assert str(requests[0].url) == API_URL
+        assert "authorization" not in requests[0].headers
         assert service.list({})["pagination"]["total"] == 4
         assert service.source()["source"] == "test"
         assert "api_key" not in service.source()
@@ -178,32 +189,28 @@ def test_public_demo_preview_never_replaces_dataset(tmp_path):
         service.close()
 
 
-def test_live_sync_collects_all_pages_before_atomic_replacement(tmp_path):
-    offsets = []
+def test_live_sync_replaces_dataset_atomically(tmp_path):
+    requests = []
     def handler(request):
-        offset = int(request.url.params["offset"]); offsets.append(offset)
-        assert request.headers["Authorization"] == "Bearer test-secret"
-        assert "codes.alpha_3" in request.url.params["response_fields"]
-        return httpx.Response(200, json=envelope([v5(row) for row in COUNTRIES[offset:offset + 2]], meta={"total": 4}))
+        requests.append(request)
+        return httpx.Response(200, json=COUNTRIES)
     service = service_with_transport(tmp_path, handler)
     try:
         result = service.sync_api()
         assert result["imported"] == 4 and result["persisted"] is True
-        assert offsets == [0, 2]
+        assert [str(request.url) for request in requests] == [API_URL]
         assert service.source()["source"] == "live_api"
     finally:
         service.close()
 
 
-@pytest.mark.parametrize("failure", ["http", "incomplete", "repeated", "demo", "malformed", "empty"])
+@pytest.mark.parametrize("failure", ["http", "malformed", "empty", "invalid"])
 def test_bad_live_source_preserves_previous_dataset(tmp_path, failure):
     def handler(request):
         if failure == "http": return httpx.Response(401)
-        if failure == "demo": return httpx.Response(200, json=envelope([v5(COUNTRIES[0])], _demo=True))
         if failure == "malformed": return httpx.Response(200, json={"success": False, "data": None})
-        if failure == "empty": return httpx.Response(200, json=envelope([], meta={"total": 0}))
-        records = [] if failure == "incomplete" and request.url.params["offset"] != "0" else [v5(COUNTRIES[0])]
-        return httpx.Response(200, json=envelope(records, meta={"total": 250}))
+        if failure == "empty": return httpx.Response(200, json=[])
+        return httpx.Response(200, json=[{"cca3": "BAD"}])
     service = service_with_transport(tmp_path, handler)
     try:
         with pytest.raises(CountrySourceError): service.sync_api()

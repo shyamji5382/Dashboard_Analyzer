@@ -1,42 +1,15 @@
 # Commerce Analytics Dashboard
 
-A full-stack data analytics application built with **FastAPI, SQLite, and React** for the company Commerce Analytics assignment. The default dashboard joins the supplied orders, products, and shipments to report revenue and delivery performance.
+A data analytics dashboard built with **FastAPI, SQLite, React, and Vite**.
+It combines JSON orders, CSV products, and XML shipments to show revenue and delivery performance.
+Commerce is the main dashboard. Countries analytics is an additional feature in the sidebar.
 
-Core capabilities:
+## Quick Start
 
-- JSON, CSV, and XML ingestion with nested order/item flattening.
-- Orders + Products + Shipments integration, validation, normalization, and data-quality reporting.
-- Order values, category revenue, revenue trends, and delivery-delay classification.
-- External currency conversion with SQLite exchange-rate caching.
-- An interactive React dashboard with date/category/delivery filters, pagination, chart drill-down, and order details.
-- Context-based state management, reusable components, and loading/error/retry states.
+Requirements: **Python 3.11+** and **Node.js 20.19+ or 22.12+**.
+Run these commands in PowerShell from `data-analytics-dashboard/`.
 
-Open http://127.0.0.1:5173/ for the Commerce dashboard. Sidebar navigation prioritizes **Dashboard**, **Orders**, and **Data sources**. The **Countries** option under **External API** opens Countries analytics, an additional engineering feature demonstrating external API consumption and nested country transformations; it is not the primary assignment workflow.
-
-## Dashboard design
-
-The frontend blends both supplied reference layouts: four pastel KPI cards with circular icons, a compact sidebar, white chart tools, and a responsive data table. Commerce combines revenue lines and order bars with separate currency/count axes, category comparisons, and a delivery timing pie. Chart selections apply filters, and trend points support keyboard drill-down. The secondary Countries view combines density rankings with a regional population pie; its Density toggle uses comparison bars, since densities are not additive shares. All visualizations use actual records, without invented growth percentages or time series.
-
-## Assignment data
-
-The primary dashboard uses the supplied `Orders.json`, `Products.csv`, and `Shipments.xml`. Opening http://127.0.0.1:5173/ shows these records directly; no view query parameter is required. Existing `?view=overview` links remain supported.
-
-| Order | Customer | Calculation | USD total | Reported shipment status | Delivery timing |
-| --- | --- | --- | --- | --- | --- |
-| 1001 | Rahul / C001 | 2 x 500 + 1 x 1200 | 2,200 | Delivered, 3 days / S001 | Unknown |
-| 1002 | Anita / C002 | 3 x 200 | 600 | Delayed, 7 days / S002 | Delayed |
-
-Expected results: **2 orders, 3 products, 2 shipments, USD 2,800 revenue, USD 1,400 average order value, and 1 delayed order**. Electronics contributes USD 2,200 and Furniture USD 600. The dataset covers January 1-2, 2024.
-
-The supplied files contain spreadsheet-style quote wrappers. `backend/data/originals/` preserves those inputs unchanged; the active files in `backend/data/` contain the same records with only those outer wrappers removed and readable formatting. The API also accepts the original exports and reports the decoding in import warnings. It does not silently fix arbitrary malformed JSON/CSV. The previous generated commerce examples are retained in `backend/data/demo/`, and a backup of the previous local SQLite database was saved under `.tools/analytics-before-assignment-*.db`.
-
-Orders use `qty` and item `price`; products use `ProductID,ProductName,Category` without catalog prices. The importers map these aliases, preserve customer and shipment IDs, and join all three datasets by IDs. Revenue uses the supplied item prices. Missing currency defaults to **USD**, as confirmed by the user, and is reported in import warnings. No product prices, images, expected dates, or actual dates have been invented.
-
-**Delay policy is status-only when promised dates are absent.** `Delayed` explicitly sets the delay flag. `Delivered` confirms completion but does not establish on-time arrival, so order 1001 remains `delivery_status: unknown`; its original reported status and duration remain visible. There is no implicit five-day SLA. `DELIVERY_SLA_DAYS` is empty/unset by default; an optional explicit value enables duration-based assessment for other datasets. Date-based shipments continue to use their actual/expected dates, which take precedence over reported status. The boolean `delayed: false` is not proof of on-time delivery; inspect `delivery_status` to distinguish Unknown from On time.
-
-## Run locally
-
-Requires Python 3.11+ and Node.js 20.19+ (or 22.12+). From the project directory:
+### 1. Install Dependencies Once
 
 ```powershell
 cd backend
@@ -45,192 +18,241 @@ python -m venv .venv
 cd ..\frontend
 npm install
 cd ..
-powershell -ExecutionPolicy Bypass -File scripts/start.ps1
 ```
 
-The start script launches both servers in the background, prints their URLs, and selects another port if the requested port is occupied. Logs and process information are in `.tools/`. Stop these servers with:
+### 2. Start Both Servers
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/start.ps1 -BackendPort 8001 -FrontendPort 5173
+```
+
+- Dashboard: http://127.0.0.1:5173/
+- API documentation: http://127.0.0.1:8001/docs
+- Health check: http://127.0.0.1:8001/health
+
+The script starts both servers in the background. If a port is unavailable, it chooses another one; use the URLs it prints. Logs are saved in `.tools/`.
+
+Stop both servers with:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts/stop.ps1
 ```
 
-A portable Python interpreter is also available at `.tools/python/python.exe` in the current workspace because the installed system Python does not start. The start script automatically uses it when a backend virtual environment is not present. This local runtime is ignored by Git; on another machine, use the normal setup above.
+For backend code changes, stop and start again, or use the manual commands below with `--reload`.
+This workspace also has `.tools/python/python.exe`; the script uses it if there is no backend virtual environment. This portable runtime is not included in Git.
 
-Alternatively, run each server in a terminal:
+### Run in Separate Terminals
+
+Stop script-managed servers first, then run:
 
 ```powershell
-# Terminal 1, from backend/
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+# Terminal 1: backend folder
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+# In this workspace, you can use ..\.tools\python\python.exe instead.
 
-# Terminal 2, from frontend/
-npm run dev
+# Terminal 2: frontend folder
+$env:API_PROXY_TARGET = 'http://127.0.0.1:8001'
+npm run dev -- --port 5173
 ```
 
-Dashboard: http://127.0.0.1:5173. Interactive API documentation: http://127.0.0.1:8000/docs.
+Examples in this README use backend port **8001**. If you use another port, update the URLs and `API_PROXY_TARGET`.
 
-The first startup imports the assignment files: 2 orders, 3 products, and 2 shipments, plus the 250-country snapshot for the secondary feature. Subsequent startups preserve the database, including intentionally emptied commerce datasets. These orders use USD so the initial dashboard does not depend on internet access. Select another reporting currency to exercise the exchange-rate API, or import mixed-currency orders.
+## Assignment Data
 
-## REST API
+The main dashboard uses the supplied files in `backend/data/`:
 
-| Method | Endpoint | Result |
+- `Orders.json`: 2 orders with 3 line items.
+- `Products.csv`: Laptop, Phone, and Chair.
+- `Shipments.xml`: 2 shipment records.
+
+| Order | Customer | Calculation | Revenue (USD) | Reported shipment | Delivery timing |
+| --- | --- | --- | --- | --- | --- |
+| 1001 | Rahul / C001 | 2 x 500 + 1 x 1200 | 2,200 | S001: Delivered, 3 days | Unknown |
+| 1002 | Anita / C002 | 3 x 200 | 600 | S002: Delayed, 7 days | Delayed |
+
+Expected totals: **2 orders, USD 2,800 revenue, USD 1,400 average order value, and 1 delayed order**.
+Electronics revenue is USD 2,200; Furniture revenue is USD 600. Order dates are January 1-2, 2024.
+
+The original spreadsheet exports are preserved in `backend/data/originals/`. Active files contain the same records with only the outer spreadsheet quote wrappers removed. The API accepts both versions and reports wrapper decoding in warnings. Older examples in `backend/data/demo/` are not the active assignment data.
+
+The supplied data has no currency, catalog prices, product images, promised dates, or actual delivery dates. Currency defaults to **USD**; other missing values are not invented.
+
+**Important:** `Delivered` does not prove on-time delivery. Order 1001 therefore remains `Unknown`. There is no assumed five-day delivery deadline.
+
+On the first startup, the app imports the assignment files and the country snapshot. Later startups keep stored data, including datasets you intentionally emptied. The initial USD dashboard works without external API calls.
+
+## REST APIs
+
+| Method | Endpoint | Purpose |
 | --- | --- | --- |
-| POST | `/ingest/json` | Flatten and replace orders and their items |
-| POST | `/ingest/csv` | Parse and replace the product catalog |
-| POST | `/ingest/xml` | Parse and replace shipments |
-| GET | `/analytics/summary` | KPIs, revenue trend, category totals, delivery counts |
-| GET | `/analytics/orders` | Filtered, paginated orders and joined line items |
-| GET | `/analytics/orders/{order_id}` | Full order details and shipment |
-| GET | `/analytics/filters` | Available categories, dates, currencies, import reports |
-| GET | `/health` | Application and database health |
+| POST | `/ingest/json` | Load orders and flatten their items |
+| POST | `/ingest/csv` | Load products |
+| POST | `/ingest/xml` | Load shipments |
+| GET | `/analytics/summary` | Return KPIs and chart data |
+| GET | `/analytics/orders` | Return filtered, paginated orders |
+| GET | `/analytics/orders/{order_id}` | Return full order and shipment details |
+| GET | `/analytics/filters` | Return filter options and import reports |
+| GET | `/health` | Check the app and database connection |
 
-Ingestion accepts raw data or a multipart upload named `file`, up to 5 MB. An empty POST loads that format's bundled assignment file. Imports replace only the selected dataset in a transaction and can run in any order. An explicitly empty array/root/header clears that dataset. Malformed documents or imports with no valid records are rejected without changing existing data. Partially valid imports accept valid records and return skipped counts and warnings; duplicate IDs keep the first valid record. Invalid individual order items are skipped with warnings.
+### Import Rules
+
+- Upload raw data or a multipart file named `file`. Maximum size: **5 MB**.
+- An empty POST loads the bundled file for that format.
+- Imports replace only the selected dataset, in one database transaction. Files can arrive in any order.
+- Explicitly empty JSON arrays, XML roots, or header-only product CSVs clear that dataset.
+- Malformed documents and nonempty uploads with no valid records leave existing data unchanged.
+- Partially valid uploads keep valid records and report skipped records and warnings. Duplicate IDs keep the first valid record; invalid order items are skipped with warnings.
+
+From the project folder:
 
 ```powershell
-curl.exe -X POST http://127.0.0.1:8000/ingest/json -H "Content-Type: application/json" --data-binary "@backend/data/Orders.json"
-curl.exe -X POST http://127.0.0.1:8000/ingest/csv -F "file=@backend/data/Products.csv"
-curl.exe -X POST http://127.0.0.1:8000/ingest/xml -F "file=@backend/data/Shipments.xml"
-curl.exe "http://127.0.0.1:8000/analytics/summary?start_date=2024-01-01&end_date=2024-01-02&currency=USD"
-curl.exe "http://127.0.0.1:8000/analytics/orders?page=1&page_size=10&delivery_status=delayed"
+curl.exe -X POST http://127.0.0.1:8001/ingest/json -H "Content-Type: application/json" --data-binary "@backend/data/Orders.json"
+curl.exe -X POST http://127.0.0.1:8001/ingest/csv -F "file=@backend/data/Products.csv"
+curl.exe -X POST http://127.0.0.1:8001/ingest/xml -F "file=@backend/data/Shipments.xml"
+curl.exe "http://127.0.0.1:8001/analytics/summary?start_date=2024-01-01&end_date=2024-01-02&currency=USD"
+curl.exe "http://127.0.0.1:8001/analytics/orders?page=1&page_size=10&delivery_status=delayed"
 ```
 
-Both summary and orders accept `start_date`, `end_date` (inclusive), `category`, `delivery_status`, `search`, and `currency`. Search matches order ID or customer name without interpreting SQL wildcard characters. Orders additionally accept `page` (1-based) and `page_size` (1-100), sorted by date descending then ID descending. Category filtering includes matching line items only; order counts are distinct, and filtered revenue/order values sum those matching items. Detail always returns the full order. An order can belong to multiple categories, so category order counts need not add up to the total order count.
+### Filters and Responses
 
-Responses use `{ "data": ..., "meta": ... }`; order lists include `pagination`. Import results contain `imported`, `skipped`, `item_count`, `warnings`, and `imported_at`. Errors use `{ "error": { "code": ..., "message": ..., "details": ... } }` with appropriate 404/413/422/503 status codes. Syntactically valid currencies whose rates are unavailable return 503. API request validation rejects inverted date ranges, unknown delivery statuses, and invalid pagination.
+Summary and orders support `start_date`, `end_date`, `category`, `delivery_status`, `search`, and `currency`. Date boundaries are inclusive. Search matches order IDs or customer names as literal text.
 
-## Input formats
+Orders also support `page` (starting at 1) and `page_size` (1-100). Results are sorted by newest date, then order ID descending. An out-of-range page returns an empty list.
 
-Nested orders can be an array or `{ "orders": [...] }`:
+Category filters include only matching line items in revenue and order values. Orders are counted once within each category, but one order can belong to multiple categories. Order details always show the full order.
 
-```json
-{
-  "orders": [{
-    "order_id": "ORD-001",
-    "order_date": "2026-07-01",
-    "customer": { "name": "Alice", "email": "alice@example.com" },
-    "currency": "USD",
-    "items": [{ "product_id": "PRD-001", "quantity": "2", "unit_price": "10.50" }]
-  }]
-}
-```
+Analytics responses use `{ "data": ..., "meta": ... }`; lists also include `pagination`. Import responses contain counts, warnings, and the import timestamp. Errors use `{ "error": { "code": ..., "message": ..., "details": ... } }`.
 
-Supported aliases: `id`/`order_id`, `date`/`order_date`, `customer_name`/`customer.name`, `customer_id`/`customer.id`, and item `qty`/`quantity`, `price`/`unit_price`. Explicit `quantity` takes precedence over `qty`. ISO datetime order dates are reduced to dates. Numeric strings are converted; fractional/nonpositive quantities and negative/nonfinite prices are rejected. Missing quantity defaults to 1 with a warning; missing currency defaults to USD; missing customer names become `Unknown customer`. Recognizable CSV-quoted JSON-line exports are decoded with the CSV parser before JSON validation, with an import warning.
+Common error statuses: **404** not found, **413** upload too large, **422** invalid data/parameters, and **503** unavailable storage or external API. Invalid dates, reversed date ranges, delivery statuses, and pagination values are validated.
 
-Product CSV uses `product_id,name,category,unit_price,currency,image_url`. Only `product_id` is required. `product_name` and `price` are accepted aliases, as are the assignment's `ProductID,ProductName,Category` headers. Known headers are matched case-insensitively with spaces/underscores normalized; duplicate mapped headers are rejected. Missing categories become `Uncategorized`, missing names use the ID, and missing currencies default to USD. UTF-8 BOMs, normally quoted fields, and single-column exports wrapping entire rows in quotes are supported. Export decoding and header normalization are reported in warnings.
+## Data Processing Rules
 
-```xml
-<shipments>
-  <shipment>
-    <order_id>ORD-001</order_id>
-    <expected_delivery>2026-07-05</expected_delivery>
-    <actual_delivery>2026-07-06</actual_delivery>
-    <carrier>DHL</carrier>
-    <tracking_number>TRK001</tracking_number>
-  </shipment>
-</shipments>
-```
+### Accepted Formats
 
-Namespaces and `expected_delivery_date`/`actual_delivery_date` aliases are supported. Empty delivery elements become null. XML is parsed with `defusedxml` to reject entity expansion and unsafe documents. The `<shipments>` container accepts only `<shipment>` children and whitespace between them; unexpected child tags or non-whitespace container text return 422 without replacing existing data. An intentionally empty `<shipments />` remains a valid request to clear shipments. Each order has at most one shipment record.
+- **JSON:** an array of orders or `{ "orders": [...] }`. Each order needs `order_id`, `order_date`, and a nonempty `items` array. Customer details are optional. Aliases include `id`, `date`, `customer_name`, `customer_id`, `qty`, and `price`. Explicit `quantity` takes priority over `qty`.
+- **CSV:** only `product_id` is required. Optional columns are `name`, `category`, `unit_price`, `currency`, and `image_url`. Aliases include `ProductID`, `ProductName`, `Category`, `product_name`, and `price`. Known headers are normalized; duplicate mapped headers are rejected. Quoted fields, multiline fields, UTF-8 BOMs, and recognized spreadsheet wrappers are supported.
+- **XML:** `<shipments>` containing `<shipment>` records, or a single `<shipment>`. Supports namespaces, shipment IDs, reported status, `delivery_days`, and optional expected/actual dates. Date aliases are `expected_delivery_date` and `actual_delivery_date`. Unsafe XML, unexpected container tags, and non-whitespace container text are rejected with `defusedxml`.
 
-The assignment format is also supported:
+Numeric strings are converted to numbers, and ISO datetimes are reduced to dates. Quantities must be positive whole numbers; prices must be finite and nonnegative. Missing quantity defaults to 1 with a warning. Missing customer names become `Unknown customer`; missing product names use the ID; missing categories become `Uncategorized`. Empty optional delivery dates become null. Delivery duration must be a whole number from 0 to 1,000,000 days. Each order has at most one shipment record.
 
-```xml
-<shipments>
-  <shipment>
-    <shipment_id>S001</shipment_id>
-    <order_id>1001</order_id>
-    <delivery_days>3</delivery_days>
-    <status>Delivered</status>
-  </shipment>
-</shipments>
-```
+See the actual input examples: [Orders.json](backend/data/Orders.json), [Products.csv](backend/data/Products.csv), and [Shipments.xml](backend/data/Shipments.xml).
 
-`delivery_days` accepts whole nonnegative numeric strings, including zero, and rejects fractional, negative, or nonfinite values. Shipment ID, reported status, and duration are stored separately from expected/actual dates, which remain null when absent. Existing databases receive additive schema migrations that preserve earlier records.
+### Joins and Revenue
 
-## Transformations and storage
+- Orders join shipments by `order_id`; line items join products by `product_id`.
+- Item prices take priority over catalog prices. Item prices use the order currency; catalog prices use the product currency.
+- Unknown products remain visible. Unpriced items are excluded from revenue and reported in `meta.data_quality`; affected orders are marked incomplete.
+- Money calculations use `Decimal`. Converted line totals are rounded to two decimal places with `ROUND_HALF_UP`; summaries, categories, trends, and tables sum those same values.
+- Currency conversion uses the [Frankfurter API](https://frankfurter.dev/), with a **24-hour SQLite cache**. Provider failure can use a cached rate marked `stale: true`; without a cached rate, the API returns 503. Rates are current reporting rates, not historical order-date rates. Dashboard totals are analytical reports, not an accounting ledger.
 
-- Orders, line items, products, and shipments are separate tables. Indexed IDs and dates support joins and SQL pagination. SQLite WAL mode, foreign keys, transactions, and short-lived connections support concurrent local requests. Products and shipments can arrive before orders, so catalog/shipment references are intentionally joined without hard foreign keys.
-- Explicit item prices take precedence over catalog prices. Item prices use the order currency; catalog fallback prices use the catalog currency. Unknown products remain visible as `Uncategorized`. Unpriced items are excluded from revenue and reported in `meta.data_quality`; incomplete orders are marked in the table and detail.
-- Values are computed with `Decimal` and rounded per converted line with `ROUND_HALF_UP` to two decimal places. Summary, trends, categories, and order tables sum the same rounded lines. These are analytical reporting values, not an accounting ledger; original unit prices and currency remain in details.
-- Date-based classification: `on_time` when actual delivery is on/before the expected date; `delayed` when actual delivery is late or an undelivered shipment is overdue; `pending` when an undelivered shipment is not yet overdue. Without an expected date, explicit Delayed/Late or On time statuses are respected. Delivered alone remains `unknown`, even with a duration. An explicitly configured duration SLA can assess timing; no SLA is assumed by default. `on_time_rate` is the percentage of on-time orders among date-completed or duration-bearing records whose timing can be classified, excluding Unknown, Pending, and status-only records from both numerator and denominator. With no eligible orders the API returns `null` and the dashboard displays `N/A`; an eligible population with no on-time orders returns `0%`. Status counts still include all classified orders.
-- Currency rates come from the [Frankfurter v2 API](https://frankfurter.dev/) without an API key. The application multiplies source amounts by source/target rates, stores rates in SQLite for 24 hours, and reports rate dates and provenance. On provider failure it can reuse a stored stale rate, marked `stale: true`; without a stored rate it returns 503 rather than fabricating a conversion. Rates are current reporting rates, not historical transaction-date rates. Internet access is needed for uncached conversions.
-- Blocking ingestion work runs in a worker thread; FastAPI also runs synchronous analytics handlers in its thread pool. Imports complete before the endpoint responds. SQL pagination limits the rows transformed for order lists; summaries scan matching line items, so very large datasets would benefit from preaggregations or a PostgreSQL deployment.
+### Delivery Timing
 
-## Dashboard
+- With promised dates: delivery on/before the promised date is `on_time`; late or overdue delivery is `delayed`; an undelivered shipment not yet overdue is `pending`.
+- Without promised dates: explicit Delayed/Late and On time statuses are respected. Delivered alone remains `unknown`, even when a duration is supplied.
+- Date-based results take priority over reported status. Optional `DELIVERY_SLA_DAYS` enables duration-based timing for other datasets; it is unset by default.
+- `on_time_rate` uses the same eligible orders in both numerator and denominator: known on-time/delayed orders with an actual delivery date or duration, including zero days. Unknown, Pending, and status-only records are excluded. No eligible orders means `null` in the API and `N/A` in the UI; a valid zero rate displays `0%`.
 
-The default Commerce Analytics Dashboard has total revenue, total orders, average order value, and delayed-order KPIs; a revenue/orders toggle; category totals; delivery distribution; and a paginated order table. Filters and search are synchronized with the URL. Order details show joined products, quantities, customer ID, original prices, converted totals, shipment ID, reported status, duration, and available dates. CSV export includes every filtered order, fetching all pages. The data-source view supports file uploads and bundled assignment imports with reports. Reported shipment status is displayed separately from assessed delivery timing.
+## Design Choices
 
-Context + reducer manages filters and pagination. Fetches use AbortController to cancel stale requests, search is debounced, summary and order errors are independent, and loading, empty, error, and retry states are included. Layouts adapt to mobile, with a collapsible navigation panel, native accessible controls, keyboard-dismissible modal, visible focus states, and reduced-motion support. Product images are optional and only shown when provided in imported records; the assignment data contains none. Failed image loads do not block analytics.
+**Storage:** SQLite keeps data between restarts without a separate database server. Orders, items, products, and shipments have separate tables; import reports and exchange rates are stored too. Indexes, transactions, foreign keys, and WAL mode support joins, pagination, and safe imports. Product/shipment references allow files to arrive before orders. Schema updates preserve existing records.
 
-## Additional feature: Countries / External API
+**Backend:** routes handle HTTP requests, services parse and transform data, and the database layer handles storage. Blocking imports run in worker threads and finish before the response is sent; there is no background job queue. Orders use SQL pagination. Summaries scan matching items, so large production workloads would need further optimization or PostgreSQL.
 
-Open **Countries** under **External API** in the sidebar, or http://127.0.0.1:5173/?view=countries. The page heading remains **Countries Analytics**. This secondary view includes country count, total population, area-weighted density, distinct currencies, regional population/density charts, density rankings, currency groups, and a paginated table. Region, inclusive population range, currency, language, and search filters apply consistently to the summary and table. Country details include currencies, languages, capitals, bordering countries with drill-down, and map links. CSV export retrieves all matching pages, not just the visible rows. Country and commerce filters remain independent when switching views.
+**Frontend:** React Context + reducer manages filters and pagination. API calls use `AbortController` to cancel old requests, search is debounced, and summary/table errors are handled independently.
 
-### External API and bundled data
+## Dashboard Features
 
-The spreadsheet's `https://restcountries.com/v3.1/all` endpoint now returns a deprecation response rather than country records. [REST Countries v5](https://restcountries.com/docs/countries/api-versions) uses `https://api.restcountries.com/countries/v5` with bearer authentication. The [documented public demo](https://restcountries.com/docs/countries) returns one sample country, not the full world dataset.
+- KPI cards: Total Orders, Total Revenue, Average Order Value, and Delayed Orders.
+- Charts: revenue trend, category revenue, and delivery performance; Revenue/Orders toggle.
+- Filters: date range, category, delivery status, search, and reporting currency. Filters stay in the URL.
+- Drill-down: select chart data to filter orders, or open an order for customer, item, price, and shipment details. Trend points support keyboard selection.
+- Paginated orders, CSV export of all matching pages, and a Data sources page for imports.
+- Reusable components, responsive layouts, mobile navigation, loading/error/empty/retry states, keyboard-dismissible dialogs, and reduced-motion support.
 
-- Without a personal API key, the dashboard starts with **250 real countries and territories from the official repository snapshot**. This is labeled `Repository snapshot`, never a live API feed.
-- **Test API** calls the v5 provider through the backend using its public demo token, normalizes the response, and shows a preview notice. Preview data never replaces stored country records.
-- To enable **Sync API**, set `$env:REST_COUNTRIES_API_KEY = 'your-key'` in the shell before starting the servers. Keep the key on the backend, never in `VITE_*` variables. The backend retrieves all pages before replacing data in one transaction. Provider errors, incomplete/repeated pages, and demo responses preserve the previous dataset.
-- The restore icon beside the source label reloads the bundled snapshot. Startup never requires a country API request; restarts preserve imported country data.
+The pastel cards and compact sidebar blend the supplied reference designs. Charts use actual records, not invented growth figures. Product images appear only when provided; failed images do not block the dashboard. Reported shipment status is shown separately from assessed delivery timing. Commerce opens at `/`; older `?view=overview` links still work.
 
-`backend/data/Countries.json` is the unmodified upstream nested JSON at commit `bfadee4f951682c29970e53677707bc558e80b74`. [Pinned source](https://github.com/restcountries/restcountries/blob/bfadee4f951682c29970e53677707bc558e80b74/src/main/resources/countriesV3.1.json), provenance in `Countries.meta.json`, and the upstream MPL-2.0 license in `REST_COUNTRIES_LICENSE.txt` are included. Download date is not the observation date of population estimates; the snapshot is not a claim of current census data.
+## Countries: Additional Feature
 
-### Modeling and transformations
+Open **Countries** in the sidebar or visit http://127.0.0.1:5173/?view=countries.
+It includes country/population/density KPIs, regional charts, currency groups, filters, pagination, CSV export, and details with capitals, languages, borders, and maps. Commerce and country filters stay independent.
 
-SQLite stores countries, currency/language catalogs, their many-to-many relationships, capitals, borders, and source metadata separately. The normalizer supports v3 nested JSON and v5 `data.objects`, converts numeric strings, validates finite nonnegative population/area, deduplicates relations, and reports skipped malformed or duplicate countries. Missing population stays null, not zero; missing or zero area yields null density. Genuine zero population remains zero.
+The app uses the no-key REST Countries endpoint requested in the external API requirement: `https://restcountries.com/v3.1/all`.
 
-Density is **population / area in square kilometers**, not GDP or an economic estimate. Combined and regional density divide the population sum by the area sum over countries with both usable values, rather than averaging country densities. Currency-group populations can overlap, while global totals count every country once. SQL `EXISTS` filters prevent many-to-many joins from multiplying counts. Pagination uses SQL LIMIT/OFFSET; related records are fetched in three batched queries per page.
+- Default data: **250 countries and territories**, labeled `Repository snapshot`, not a live feed.
+- **Sync API:** calls REST Countries through the backend and replaces stored countries only after the full response validates.
+- `preview=true` checks the live endpoint and returns a normalized sample without replacing stored countries.
+- Provider errors, malformed responses, and empty responses preserve existing data. The restore icon reloads the bundled snapshot; restarts preserve stored countries.
 
-| Method | Endpoint | Result |
+- Country, currency, language, capital, and border data use separate tables. The normalizer accepts v3 nested JSON and v5 `data.objects`, validates numbers, removes duplicate relations, and reports skipped records.
+- Missing population stays null, not zero. A genuine zero stays zero; missing/zero area gives null density.
+- Density is population per square kilometer. Regional/global density uses population and area sums from the same usable countries, not an average of country densities. Density charts use comparisons, not pie shares.
+- Currency-group populations may overlap. SQL filters avoid duplicate country counts; global totals count each country once.
+
+| Method | Endpoint | Purpose |
 | --- | --- | --- |
-| POST | `/ingest/countries?source=snapshot` | Restore the full bundled snapshot |
-| POST | `/ingest/countries?source=api&preview=true` | Live preview without changing storage |
-| POST | `/ingest/countries?source=api` | Full paginated v5 sync with a backend API key |
-| GET | `/analytics/countries/summary` | KPIs, regions, currency groups, density rankings |
-| GET | `/analytics/countries` | Filtered, sorted, paginated countries |
-| GET | `/analytics/countries/{code}` | Country details and bordering countries |
-| GET | `/analytics/countries/filters` | Available filters and source metadata |
+| POST | `/ingest/countries?source=snapshot` | Restore bundled countries |
+| POST | `/ingest/countries?source=api&preview=true` | Preview the API without replacing data |
+| POST | `/ingest/countries?source=api` | Full sync from REST Countries v3.1 |
+| GET | `/analytics/countries/summary` | Return country KPIs and chart data |
+| GET | `/analytics/countries` | Return filtered, sorted, paginated countries |
+| GET | `/analytics/countries/{code}` | Return details and borders |
+| GET | `/analytics/countries/filters` | Return filter options and source information |
 
-Summary and list accept `region`, `population_min`, `population_max`, `currency` (uppercase three-letter code), `language`, and `search`. List additionally accepts `page`, `page_size` (1-100), and `sort`: `population_desc`, `density_desc`, `area_desc`, or `name_asc`. Details use three-letter country codes. API keys are never returned in metadata or error messages.
+Filters: `region`, inclusive `population_min`/`population_max`, uppercase currency code, `language`, and `search`. Lists also accept `page`, `page_size` (1-100), and `sort`: `population_desc`, `density_desc`, `area_desc`, or `name_asc`. Details use three-letter country codes.
 
-```powershell
-curl.exe "http://127.0.0.1:8000/analytics/countries/summary?region=Asia&population_min=10000000"
-curl.exe "http://127.0.0.1:8000/analytics/countries?currency=EUR&page=1&page_size=20"
-curl.exe -X POST "http://127.0.0.1:8000/ingest/countries?preview=true"
-```
+Snapshot source: [pinned official repository](https://github.com/restcountries/restcountries/blob/bfadee4f951682c29970e53677707bc558e80b74/src/main/resources/countriesV3.1.json). The unmodified `Countries.json`, provenance in `Countries.meta.json`, and MPL-2.0 license in `REST_COUNTRIES_LICENSE.txt` are in `backend/data/`. Snapshot population figures are not claimed to be current census data.
 
 ## Configuration
 
-`backend/.env.example` and `frontend/.env.example` list configuration options. Backend environment variables must be set in the shell (the application does not automatically load `.env`). Vite loads frontend `.env` normally.
+See `backend/.env.example` and `frontend/.env.example`. Set backend variables in PowerShell; the backend does **not** automatically load `.env`. Vite loads frontend `.env` files.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `ANALYTICS_DB_PATH` | `backend/analytics.db` | SQLite file |
-| `SEED_DEMO_DATA` | `true` | Initial assignment files and country snapshot import; does not load `data/demo/` |
-| `REST_COUNTRIES_API_KEY` | unset | Full v5 sync; without a key, Test API uses the public preview |
-| `DELIVERY_SLA_DAYS` | unset | Optional duration SLA; unset preserves status-only classification |
-| `CORS_ORIGINS` | localhost and 127.0.0.1 on 5173 | Comma-separated origins |
-| `VITE_API_BASE_URL` | `/api` | Browser-facing API base URL |
-| `API_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite's backend proxy target |
+| `SEED_DEMO_DATA` | `true` | Initial assignment/snapshot import, not `data/demo/` |
+| `DELIVERY_SLA_DAYS` | unset | Optional duration deadline |
+| `CORS_ORIGINS` | localhost and 127.0.0.1 on 5173 | Allowed browser origins |
+| `VITE_API_BASE_URL` | `/api` | Frontend API base URL |
+| `API_PROXY_TARGET` | `http://127.0.0.1:8000` | Vite proxy target; startup script sets the actual backend port |
 | `DASHBOARD_URL` | `http://127.0.0.1:5173` | Browser-test target |
 
-The Vite development proxy strips `/api`. For production, run `npm run build`, serve `frontend/dist`, and reverse-proxy `/api/*` to FastAPI, stripping `/api`, or configure `VITE_API_BASE_URL` before building. The local app has no authentication and binds to loopback by default.
+For production, build and serve `frontend/dist`. Reverse-proxy `/api/*` to FastAPI, removing `/api`, or set `VITE_API_BASE_URL` before building. The local app has no authentication and binds to loopback by default.
 
-## Verification
+## Tests and Build
 
 ```powershell
-# From backend, using your chosen Python environment
-python -m pytest -q
-# In this workspace: ..\.tools\python\python.exe -m pytest -q
+# Backend folder: isolated test databases, no external API connection needed
+.\.venv\Scripts\python.exe -m pytest -q
+# This workspace can also use ..\.tools\python\python.exe -m pytest -q
 
-# From frontend; both servers must be running with the bundled data
+# Frontend folder: build the app
 npm run build
+
+# Install the test browser once
 $env:PLAYWRIGHT_BROWSERS_PATH = Join-Path (Get-Location).Path '..\.tools\browsers'
 npx playwright install chromium
-npm run test:e2e
+
+# Both servers must be running with the bundled data
+# Keep the live database and import history unchanged
+npm run test:e2e -- --grep-invert "source view imports"
 ```
 
-Backend tests use isolated SQLite files and mocked external APIs, with no internet dependency. Assignment tests cover original exports, aliases, exact totals, status-only timing, invalid durations, filters, pagination, and preservation through schema migration. XML regression tests verify that unsupported document structures preserve records and import metadata, while intentional empty imports remain supported. Country tests cover v3/v5 normalization, missing values, many-to-many aggregation, weighted density, filtering, pagination, provenance, preview safety, and failed synchronization. Browser tests exercise both views on desktop and mobile, including short-height navigation, and save screenshots to `frontend/test-results/`. The 205-order pagination/export fixtures exist only in temporary backend databases or mocked browser responses; they never replace the supplied assignment records. Tests expect the 250-country snapshot and bundled assignment data (2 orders, 3 products, 2 shipments); restore these through the UI before testing a modified database. The automated UI preview test mocks the provider response; use Test API to verify an actual external connection. To leave the running database and its import history unchanged, run `npm run test:e2e -- --grep-invert "source view imports"`; the excluded upload tests replace the live datasets with the supplied files.
+To include upload browser tests, run `npm run test:e2e`. Those tests re-import the supplied files and update import history; use a test/demo instance for that run.
 
-Additional edge-case regressions cover enormous out-of-range pages, maximum ISO dates, leap-day gaps, malformed and oversized multipart uploads, Unicode and multiline fields, zero prices and zero-day deliveries, late-arriving catalogs, literal search characters, transactional rollback after an insert failure, exact cache expiry, provider timeouts, invalid country counts, and health checks during a blocked import worker. Browser regressions hold or fail requests to verify loading indicators, independent table/detail errors, cancellation on modal close, rapid filter changes, invalid/empty filter recovery, non-JSON responses, and export failure recovery without a partial download.
+- Backend tests cover parsing, validation, joins, totals, timing, filters, pagination, persistence, rollback, cache expiry, provider failures, and country sync safety.
+- Browser tests cover desktop/mobile layouts, navigation, toggles, drill-down, loading/errors/retry, request cancellation, rapid filters, and exports. Screenshots are saved in `frontend/test-results/`.
+- Edge cases include huge pages, maximum ISO dates, leap days, zero prices/durations, malformed/oversized uploads, multiline/Unicode fields, and late-arriving products.
+- Large pagination fixtures use temporary databases or browser mocks, not the assignment database. Country API sync tests mock the provider; use Sync API for a real external connection.
+
+Browser tests expect the bundled **2 orders, 3 products, 2 shipments, and 250 countries**. Restore those datasets first if you have replaced them.
+
+## Project Structure
+
+```text
+backend/app/       API routes, services, schemas, and database code
+backend/data/      Assignment files, originals, and country snapshot
+backend/tests/     Backend tests
+frontend/src/      React pages, components, contexts, and API service
+frontend/tests/    Browser tests
+scripts/           Start/stop scripts
+```

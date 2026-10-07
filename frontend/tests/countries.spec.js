@@ -131,15 +131,15 @@ test('country and commerce views preserve independent filters', async ({ page })
   await expect(page.locator('.kpi').first().locator('.kpi-value')).toHaveText('$2,200.00');
 });
 
-test('country API error can be retried and demo preview does not replace data', async ({ page }) => {
+test('country API error can be retried and live sync reports imported countries', async ({ page }) => {
   await page.route('**/api/analytics/countries/summary**', (route) => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: { message: 'Country storage unavailable' } }) }));
   await page.goto('/?view=countries');
   await expect(page.getByRole('heading', { name: 'Unable to load countries' })).toBeVisible();
   await page.unroute('**/api/analytics/countries/summary**');
   await page.getByRole('button', { name: 'Retry countries', exact: true }).click();
   await expect(countryCount(page)).toHaveText('250');
-  await page.route('**/api/ingest/countries?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { persisted: false, preview: [{ name: 'Canada', currencies: [{ code: 'CAD' }] }] } }) }));
-  await page.getByRole('button', { name: 'Test API', exact: true }).click();
-  await expect(page.getByRole('status')).toContainText('Preview only');
+  await page.route('**/api/ingest/countries?**', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { persisted: true, imported: 250, skipped: 0, warnings: [], source: 'live_api' } }) }));
+  await page.getByRole('button', { name: 'Sync API', exact: true }).click();
+  await expect(page.getByRole('status')).toContainText('250 countries imported from REST Countries API');
   await expect(countryCount(page)).toHaveText('250');
 });

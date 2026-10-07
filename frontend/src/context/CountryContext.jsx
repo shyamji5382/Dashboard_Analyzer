@@ -61,14 +61,15 @@ export function CountryProvider({ children }) {
   const refresh = useCallback(() => setRevision((value) => value + 1), []);
   const setFilters = useCallback((value) => dispatch({ type: 'filters', value }), []);
   const resetFilters = useCallback(() => dispatch({ type: 'reset' }), []);
-  async function sync(source = 'api') {
+  async function sync(source = 'api', preview = false) {
     setSyncing(true); setActionError(''); setNotice('');
     try {
-      const result = await api.syncCountries(source, source === 'api' && !options?.source.api_configured);
-      if (result.data.persisted) { setNotice(`${result.data.imported} countries imported.`); refresh(); }
+      const result = await api.syncCountries(source, preview);
+      if (result.data.persisted) { setNotice(`${result.data.imported} countries imported from ${source === 'api' ? 'REST Countries API' : 'the repository snapshot'}.`); refresh(); }
       else {
         const sample = result.data.preview[0];
-        setNotice(`API connection verified: ${sample.name}, ${sample.currencies.map((entry) => entry.code).join(', ')}. Preview only. Full synchronization requires a server-side API key.`);
+        const currencies = sample.currencies.map((entry) => entry.code).join(', ') || 'no listed currencies';
+        setNotice(`API connection verified: ${sample.name}, ${currencies}. Preview only; stored countries were not replaced.`);
       }
     } catch (err) { setActionError(err.message); }
     finally { setSyncing(false); }
